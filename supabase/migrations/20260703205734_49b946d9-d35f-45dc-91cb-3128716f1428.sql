@@ -1,0 +1,24 @@
+
+REVOKE EXECUTE ON FUNCTION public.get_least_selling_items_report(text, text, uuid, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_modifier_sales_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_combo_sales_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_mix_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_engineering_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_item_profitability_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_profitability_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_recipe_cost_vs_price_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_contribution_margin_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_high_margin_items_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_low_margin_items_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_performance_trend_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_item_popularity_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_advanced_combo_performance_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_revenue_contribution_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_discount_analysis_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_forecast_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_seasonal_item_performance_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_new_menu_performance_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_modifier_profitability_report(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_ai_menu_recommendations(text, text, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_health_score(uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_menu_executive_stats(uuid) FROM PUBLIC, anon;
