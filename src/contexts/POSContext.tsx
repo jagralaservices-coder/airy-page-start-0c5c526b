@@ -2411,6 +2411,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newHeldBills = heldBills.filter((b) => !billIds.includes(b.id));
     setHeldBillsState(newHeldBills);
     setHeldBills(newHeldBills);
+    emitPosEvent('pos:heldbill-updated', { storeId: activeStore?.id ?? null });
 
     toast.success(`Merged ${billsToMerge.length} bills into current order`);
   };
