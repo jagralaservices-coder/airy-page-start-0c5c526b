@@ -803,31 +803,35 @@ const App = () => {
                 <MerchantProvider>
                   <StoreProvider>
                     <SubscriptionProvider>
-                      <FeatureAccessProvider>
-                        <ImpersonationProvider>
-                          <POSProvider>
-                            <TooltipProvider>
-                              <Toaster />
-                              <Sonner />
-                              <OfflineIndicator />
-                              <ImpersonationBanner />
-                              {window.isDesktopApp ? (
-                                <HashRouter>
-                                  <BackgroundQROrderManager />
-                                  <AppRoutes />
-                                  <PWAInstallPrompt />
-                                </HashRouter>
-                              ) : (
-                                <BrowserRouter>
-                                  <BackgroundQROrderManager />
-                                  <AppRoutes />
-                                  <PWAInstallPrompt />
-                                </BrowserRouter>
-                              )}
-                            </TooltipProvider>
-                          </POSProvider>
-                        </ImpersonationProvider>
-                      </FeatureAccessProvider>
+                      <RealtimeProvider>
+                        <POSDataProvider>
+                          <FeatureAccessProvider>
+                            <ImpersonationProvider>
+                              <POSProvider>
+                                <TooltipProvider>
+                                  <Toaster />
+                                  <Sonner />
+                                  <OfflineIndicator />
+                                  <ImpersonationBanner />
+                                  {window.isDesktopApp ? (
+                                    <HashRouter>
+                                      <BackgroundQROrderManager />
+                                      <AppRoutes />
+                                      <PWAInstallPrompt />
+                                    </HashRouter>
+                                  ) : (
+                                    <BrowserRouter>
+                                      <BackgroundQROrderManager />
+                                      <AppRoutes />
+                                      <PWAInstallPrompt />
+                                    </BrowserRouter>
+                                  )}
+                                </TooltipProvider>
+                              </POSProvider>
+                            </ImpersonationProvider>
+                          </FeatureAccessProvider>
+                        </POSDataProvider>
+                      </RealtimeProvider>
                     </SubscriptionProvider>
                   </StoreProvider>
                 </MerchantProvider>
