@@ -1,7 +1,5 @@
 // Shared store identity helpers.
 // Pure localStorage/sessionStorage readers — no business logic.
-// Extracted from useCloudData so consumers can import identity
-// without pulling in the legacy cloud data hook.
 
 export const getCurrentStoreId = (): string | null => {
   const ownerSelected = localStorage.getItem('owner_selected_store_id');
