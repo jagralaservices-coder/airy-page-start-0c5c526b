@@ -204,6 +204,11 @@ const crossInvalidateSlice1 = (
       window.dispatchEvent(new CustomEvent('pos:credit-payment-added', { detail: { storeId } }));
     } catch {}
   }
+  if (dataType === 'expenses') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:expense-updated', { detail: { storeId } }));
+    } catch {}
+  }
 };
 
 
