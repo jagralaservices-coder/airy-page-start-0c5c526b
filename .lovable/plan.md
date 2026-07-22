@@ -1,143 +1,84 @@
-# MAXORA Enterprise Accounting Module — Build Plan
+## Scope (confirmed with you)
 
-This is a very large, ERP-grade module (comparable to Tally / Zoho Books / Odoo Accounting). It cannot be built safely in a single turn — it needs a **schema foundation first**, then progressive layers on top. I'll ship it in **6 approved phases**, each independently useful, with automatic posting hooks added incrementally so nothing in your live POS breaks.
+Priorities: **#1 Cashier menu blank**, **#2 Inventory deduction from Owner stock**, **#3 Subscription inheritance + #5 role badge**, **#4 Duplicate header**.
 
-Below is the full plan. Once you approve, I'll start with Phase 1 (schema + Chart of Accounts + posting engine).
+Out of scope for now (too big, will regress if bundled): global refactor of POSContext (2,845 lines), rewriting `useStoreDataSync`, DB integrity migration sweep, performance/render-loop hunt across the whole app. Those need their own passes — I'll flag concrete follow-ups at the end.
 
----
-
-## Architecture Overview
-
-Core principle: **one canonical Journal**. Every financial event (bill, refund, purchase, expense, payment, credit note, asset, depreciation, payroll) writes a balanced set of debit/credit lines into the same journal. All reports (Trial Balance, P&L, Balance Sheet, Ledgers, GST) are derived from that journal — no parallel truth.
-
-```text
- Billing ─┐
- Purchase ┤
- Expense  ┤
- Refund   ├──► posting-engine ──► journal_entries ──► journal_lines
- CreditNt ┤                          │                     │
- Payment  ┤                          ▼                     ▼
- Assets   ┤                     accounting_periods    account_balances (materialized)
- Payroll ─┘                          │
-                                     ▼
-                    Trial Balance / P&L / Balance Sheet / Cash Flow / Ledgers
-```
-
-Store scoping: every journal line carries `store_id` + `cost_center_id`. Consolidated view = sum across stores; store-wise view = filter.
-
-RLS: Owner/Accountant full; Store Manager read own store; Cashier no access. Reuse existing `has_role` / `can_manage_store` functions.
+Merchant resolution rule you gave me: **cashier row itself carries owner/merchant + store link**. Staff table stays untouched.
 
 ---
 
-## Phase 1 — Foundation (Schema + Posting Engine + Chart of Accounts UI)
+## Phase 1 — Cashier menu not loading (#1)
 
-**Database**
-- `chart_of_accounts` (id, merchant_id, code, name, type: asset/liability/equity/income/expense, subtype, parent_id, is_system, is_active, opening_balance, currency)
-- `accounting_periods` (fiscal year, month, status: open/closed/locked)
-- `journal_entries` (id, merchant_id, store_id, entry_no, entry_date, source_type, source_id, narration, status, created_by, approved_by, reversed_by)
-- `journal_lines` (entry_id, account_id, store_id, cost_center_id, debit, credit, party_type, party_id, tax_code, metadata) — CHECK sum(debit)=sum(credit) via trigger
-- `cost_centers` (id, merchant_id, name, type: department/store/project/kitchen/warehouse)
-- `account_balances` (materialized daily snapshot per account/store for fast reports)
-- Seed a **default Indian COA** on merchant creation (Cash, Bank, Sales, Purchases, CGST/SGST/IGST Payable & Receivable, AR, AP, Inventory, COGS, Rent, Salary, Electricity, Marketing, Discounts, Round-Off, Retained Earnings, Opening Balance Equity, etc.)
-- RLS + GRANTs on all tables
+**Root cause hypothesis** (from code trace):
+`MenuGrid` reads `menuItems` from `POSContext`. `POSContext` loads menu via `useCloudData('menu_items', …)` which calls `sync-store-data` edge function keyed on `getCurrentStoreId()` from localStorage (`owner_selected_store_id` → `pos_active_store_data` → `pos_active_store`).
 
-**Posting engine** — `src/lib/accounting/postingEngine.ts`
-- `postJournal({ source, lines, storeId, date, narration })` — validates balance, writes entry + lines atomically via edge function `accounting-post-journal`
-- Deterministic idempotency key per source (bill_id, purchase_id, etc.) — reposting is safe
-- Reversal helper (`reverseJournal(entryId, reason)`)
+For a cashier who signs in via Supabase auth (not the PIN flow), those localStorage keys are never populated by the cashier login path — so `storeId` is null, query is disabled, menu stays empty. Owner works because `OwnerStoreSelectionDialog` writes `owner_selected_store_id`.
 
-**UI (new `/accounting` route, role-gated)**
-- Accounting shell with sidebar: Dashboard, COA, Journal, Ledgers, Reports, Banking, Tax, Assets, Budgets, Settings
-- **Chart of Accounts page** — tree view, create/edit/deactivate, opening balances, import default COA
-- Dashboard cards (Today's revenue/expenses, Cash, Bank, AR, AP, Profit today/month, Tax payable/receivable) — all derived queries
+**Fix**:
+1. In `SupabaseAuthContext` cashier/staff login path: after resolving `user_roles` row, if `role in ('cashier','staff','store_manager')` and `store_id` is present, write `owner_selected_store_id` + `pos_active_store_data` (id, name, merchant_id, business_type, subscription_tier resolved from merchant) — same shape owner selection uses.
+2. Guarantee `POSContext` picks up the change: dispatch the existing `pos:store-changed` event (already used elsewhere) so `useCloudData` requery fires.
+3. Verify `sync-store-data` edge function's RLS/merchant check doesn't reject cashier JWTs querying the owner's store — read the function, confirm it resolves merchant via `stores.merchant_id`, not from the caller's `user_roles.merchant_id` only.
+
+**Success check (I'll run)**: build + tsgo passes; grep confirms cashier path writes the same keys owner does. Runtime verification is yours.
 
 ---
 
-## Phase 2 — Automatic Postings from Existing Transactions
+## Phase 2 — Subscription inheritance + role badge (#3, #5)
 
-Wire the posting engine into every existing flow (no UI change for cashiers):
+**Root cause**: `useSubscription` resolves merchantId from `customer?.id` / `userRole.customer_id` / `userRole.merchant_id` / `pos_active_store_data.customer_id`. For a cashier those are usually null → falls through to `setTier('basic')` default. `AppHeader` shows `tierLabel` → "Basic Plan".
 
-| Source | Debit | Credit |
-|---|---|---|
-| Cash sale | Cash | Sales, Output CGST, Output SGST, Round-off |
-| Card/UPI sale | Bank/Gateway Clearing | Sales + taxes |
-| Credit sale | AR (customer) | Sales + taxes |
-| Customer payment | Cash/Bank | AR |
-| Refund | Sales Return + taxes | Cash/Bank/AR |
-| Credit note | Sales Return | Customer Credit Liability |
-| Purchase (cash) | Inventory/Expense + Input GST | Cash/Bank |
-| Purchase (credit) | Inventory + Input GST | AP (supplier) |
-| Supplier payment | AP | Cash/Bank |
-| Expense | Expense head + Input GST | Cash/Bank |
-| Stock adjustment | Inventory Loss | Inventory |
-| Gateway settlement | Bank | Gateway Clearing (net of fees → Payment Gateway Fees expense) |
-
-Hooks added in: `POSContext.finalizeOrder`, `sales-returns`, `credit_ledger`/`credit_payments`, `purchase_orders`, `expenses`, `stock_adjustments`, `gateway_settlements`. All idempotent, all queued through the existing offline queue so offline bills post to journal on sync.
+**Fix**:
+1. `useSubscription`: add resolution step — if merchantId still null after existing checks, query `user_roles` for the current user's row and read `merchant_id`/`customer_id`; if still null, resolve from `stores.merchant_id` using active store id. Cache the resolved id so we don't re-query.
+2. Never default `tier` to `'basic'` when merchant lookup is pending — keep `loading=true` until we've either resolved or definitively failed. Header should show a skeleton, not a wrong badge.
+3. `AppHeader` top-right: below the name, render `userRole.role` capitalized (Owner / Cashier / Manager / Admin). Source is `useSupabaseAuth().userRole.role` — no hardcoding.
 
 ---
 
-## Phase 3 — Ledgers, Journal, Trial Balance, P&L, Balance Sheet, Cash Flow
+## Phase 3 — Duplicate header (#4)
 
-- **Journal page** — list with filters (date, store, source, account), drill-down, manual journal entry dialog, recurring template, approval workflow (draft → posted), reverse entry
-- **General Ledger** page — pick account → running balance, opening/closing, drill to source document; presets for Customer Ledger, Supplier Ledger, Cash, Bank, GST, Inventory
-- **Trial Balance** — as-of date, opening/debit/credit/closing, difference indicator, drill-through
-- **P&L** — period picker, revenue → COGS → gross profit → opex → net profit, comparative (this month vs last)
-- **Balance Sheet** — current/fixed assets, current/long-term liabilities, equity, retained earnings computed from closed periods
-- **Cash Flow** — indirect method: operating/investing/financing, opening/closing cash
-- All reports store-filterable & consolidated; export to **PDF / Excel / CSV / Print**
+**Root cause**: `POSBillingPage` renders `BillingHeader`, and `CashierBillingPage` wraps it with an additional sticky "Cashier Mode · Auth Session" bar on top of the app's `AppHeader` from `MainLayout`. Screenshot shows Maxora bar + "Cashier Mode · Auth Session" bar = two headers.
+
+**Fix**: Remove the extra sticky bar in `CashierBillingPage` for the `isCashier()` branch. Move the "Cashier Mode" indicator into `AppHeader` role display (Phase 2 already puts role under name). PIN-session branch keeps its slim bar because it has real per-shift info (name / code / logout) that doesn't belong in AppHeader.
 
 ---
 
-## Phase 4 — Banking, Tax, AR/AP
+## Phase 4 — Inventory deduction from Owner stock (#2)
 
-- `bank_accounts` table, transfers, deposits, withdrawals, **bank reconciliation** UI (import CSV statement, auto-match by amount+date+reference, manual match, unreconciled queue)
-- **Tax Register** — output/input GST by rate, HSN summary, **GSTR-1 / GSTR-3B ready** export (JSON + Excel)
-- **AR Aging** (0-30/31-60/61-90/90+), Collection history, dunning list
-- **AP Aging**, payment schedule, outstanding payables
+**Root cause**: `useInventoryDeduction` filters `inventory_items` by `store_id` = active store. If cashier's active store == owner's store (fixed in Phase 1), deduction hits the shared row. Two remaining gaps:
+1. Basic plan short-circuits deduction (`if (!hasRecipeDeduction) return;`). User said "Cashier sells Chicken Burger → inventory goes 20→19.8kg" — that requires recipe-based deduction regardless of plan tier for the merchant's actual (Platinum) plan. Phase 2 fixes the tier read, so this stops being a blocker.
+2. No `inventory_transactions` log row is written. Add insert to `inventory_transactions` (source='sale', reference_id=order id, qty_delta negative, before/after qty) after each successful update. Table already exists.
 
----
-
-## Phase 5 — Assets, Depreciation, Budgets, Cost Centers, Multi-Outlet
-
-- `fixed_assets` (category, purchase date, cost, salvage, useful life, method: SLM/WDV, location/store), disposal & transfer flows
-- Scheduled edge function `accounting-run-depreciation` — monthly auto-post depreciation entries
-- `budgets` + `budget_lines` (monthly, department/category/store), **Budget vs Actual** report with variance alerts
-- Cost center allocation on every expense/journal line; **Cost Center P&L**
-- Multi-outlet: consolidated books (default) + per-store books (filter), inter-store transfer journal template
+**Fix**:
+- Keep the existing deduction flow; add transaction-log insert.
+- Add unit-mismatch guard: if `ingredient.unit !== invItem.unit`, log warning and skip (no silent bad math). Real unit conversion is a bigger feature — not in this pass.
 
 ---
 
-## Phase 6 — Audit, Approvals, Period Close, Performance
+## Technical notes
 
-- `accounting_audit_log` — every create/edit/delete/approve/reverse with before/after JSON, actor, IP
-- Approval workflow: manual journals > threshold require Owner approval; edit/void requires reason + audit entry
-- **Period close**: lock a month → no further postings; reopen requires Owner + reason
-- Performance: materialized `account_balances` refreshed via trigger on `journal_lines`; indexes on `(account_id, entry_date)`, `(store_id, entry_date)`, `(source_type, source_id)`; server-side aggregation edge functions for reports (no client-side million-row scans)
-- Retained Earnings auto-roll on year-end close
+**Files touched**:
+- `src/contexts/SupabaseAuthContext.tsx` — cashier login writes store keys
+- `src/hooks/useSubscription.ts` — merchant fallback via user_roles/stores; no basic default while loading
+- `src/components/layout/AppHeader.tsx` — role sub-label under user name
+- `src/pages/CashierBillingPage.tsx` — remove duplicate sticky bar in auth-cashier branch
+- `src/hooks/useInventoryDeduction.ts` — inventory_transactions log + unit guard
+- Possibly `supabase/functions/sync-store-data/index.ts` if it rejects cashier JWTs (read first, only edit if needed)
 
----
+**No DB migrations planned** unless Phase 1 investigation reveals `user_roles` for cashiers is genuinely missing `store_id`/`merchant_id` — then a targeted backfill + trigger, surfaced for your approval.
 
-## Role & Route Access
-
-| Role | Access |
-|---|---|
-| super_admin / admin / owner | Full accounting |
-| accountant (new role in `app_role` enum) | Full accounting, no store ops |
-| store_manager | Read-only, own store scope |
-| cashier | Blocked from `/accounting/*` |
-
-Add `accountant` to the role enum + gate `/accounting` in `App.tsx`.
+**Verification**: build passes, tsgo clean, grep-verify no hardcoded "basic"/"Cashier" strings introduced. Runtime end-to-end (owner creates item → cashier sees it → sells → stock drops) is on your side per your answer.
 
 ---
 
-## Non-Goals for this build
-- Payroll postings (schema-ready, hooks stubbed — marked "Future" as you requested)
-- TDS (schema-ready, disabled)
-- Multi-currency (single currency INR; structure supports adding later)
+## Explicit non-goals this pass
 
----
+- POSContext rewrite / single-context consolidation
+- Realtime subscription audit
+- Performance profiling (duplicate fetch elimination beyond what's incidental)
+- Full RLS audit across 100+ tables
+- IndexedDB / offline queue rework
 
-## Deliverable per phase
-Each phase ships a working, testable slice. After each phase I'll pause for your validation before starting the next — same rhythm we've been using for Payment Hub, Store Isolation, etc.
+If Phase 1-4 land clean, I'll propose Phase 5 (context consolidation) as its own plan.
 
-**On approval I start Phase 1 immediately: migration for COA + journal tables, seed default Indian COA, posting engine, `/accounting` shell, Chart of Accounts UI, and Dashboard.**
+Ready to proceed on your OK.
