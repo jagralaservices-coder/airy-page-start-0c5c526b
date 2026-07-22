@@ -2356,6 +2356,9 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setHeldBillsState(newHeldBills);
     setHeldBills(newHeldBills);
+    emitPosEvent(existingIdx >= 0 ? 'pos:heldbill-updated' : 'pos:heldbill-created', {
+      storeId: activeStore?.id ?? null,
+    });
     clearCart();
   };
 
