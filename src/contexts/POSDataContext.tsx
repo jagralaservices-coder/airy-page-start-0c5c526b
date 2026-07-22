@@ -223,24 +223,7 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
 
 
-  // Cross-hook event bus → cache invalidation.
-  React.useEffect(() => {
-    const offs = [
-      onPosEvent('pos:store-changed', () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.all })),
-      onPosEvent('pos:inventory-updated', () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
-      onPosEvent('pos:inventory-adjusted', () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
-      onPosEvent('pos:stock-deducted', () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
-      onPosEvent('pos:recipe-updated', () => {
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
-      }),
-    ];
-    return () => subs.forEach((u) => u());
-  }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
+
 
 
   // Cross-hook event bus → cache invalidation.
