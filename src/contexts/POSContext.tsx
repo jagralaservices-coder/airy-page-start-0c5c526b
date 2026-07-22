@@ -2427,6 +2427,8 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     setTablesState(newTables);
     setTables(newTables);
+    // Slice 5: notify POSDataContext + peers via typed event bus.
+    try { emitPosEvent('pos:table-status-changed', { tableId: id, status, storeId: activeStoreId ?? null }); } catch {}
   };
 
 
