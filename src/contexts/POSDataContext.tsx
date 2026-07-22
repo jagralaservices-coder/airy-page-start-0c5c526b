@@ -388,6 +388,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() })),
       onPosEvent('pos:queue-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() })),
+      // Slice 8: Expenses + derived reports/dashboard/analytics.
+      onPosEvent('pos:expense-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.expenses(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+      }),
+      onPosEvent('pos:reports-refreshed', () => {
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+      }),
+      // Order lifecycle events also affect derived report/dashboard caches.
+      onPosEvent('pos:order-completed', () => {
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+      }),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
