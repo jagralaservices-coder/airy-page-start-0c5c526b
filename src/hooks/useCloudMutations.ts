@@ -95,10 +95,10 @@ export const useUpdateOrderMutation = () => {
   });
 };
 
-// Slice 1 bridge: cross-invalidate the POSDataContext React Query cache
-// (['pos','menu-items'|'categories', storeId]) whenever legacy cloudData
-// mutations touch menu_items or categories, and emit `pos:menu-updated`
-// so every consumer refreshes without a manual signal.
+// Slice 1 + Slice 2 bridge: cross-invalidate the POSDataContext React Query
+// cache (['pos', <slice>, storeId]) whenever legacy cloudData mutations touch
+// menu_items, categories, or products. Emits typed pos: events so every
+// consumer refreshes without a manual signal.
 const crossInvalidateSlice1 = (
   queryClient: ReturnType<typeof useQueryClient>,
   storeId: string | null,
@@ -109,13 +109,23 @@ const crossInvalidateSlice1 = (
     queryClient.invalidateQueries({ queryKey: ['pos', 'menu-items', storeId] });
   } else if (dataType === 'categories') {
     queryClient.invalidateQueries({ queryKey: ['pos', 'categories', storeId] });
+  } else if (dataType === 'products') {
+    // Slice 2: products cache is keyed by (merchantId, storeId). Invalidate
+    // the whole products namespace so every merchant scope refreshes.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'products'] });
   }
   if (dataType === 'menu_items' || dataType === 'categories') {
     try {
       window.dispatchEvent(new CustomEvent('pos:menu-updated', { detail: { storeId } }));
     } catch {}
   }
+  if (dataType === 'products') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:products-updated', { detail: { storeId } }));
+    } catch {}
+  }
 };
+
 
 // Generic mutation for store data (inventory, expenses, held_bills, categories, pos_customers)
 export const useSaveCloudDataMutation = (dataType: string) => {
