@@ -63,21 +63,13 @@ export default function CashierBillingPage() {
     );
   }
 
-  // If natively logged in as a Cashier via AuthPage
+  // If natively logged in as a Cashier via AuthPage — render billing without a
+  // second header bar (AppHeader already shows name + Cashier role).
   if (isCashier()) {
     return (
-      <div className="relative">
-        <div className="sticky top-0 z-40 flex items-center justify-between gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-xs">
-          <div className="flex items-center gap-2 truncate">
-            <User className="h-3.5 w-3.5" />
-            <span className="font-semibold">Cashier Mode</span>
-            <span className="opacity-80">· Auth Session</span>
-          </div>
-        </div>
-        <Suspense fallback={<div className="p-6">Loading billing…</div>}>
-          <POSBillingPage />
-        </Suspense>
-      </div>
+      <Suspense fallback={<div className="p-6">Loading billing…</div>}>
+        <POSBillingPage />
+      </Suspense>
     );
   }
 
