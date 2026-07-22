@@ -169,13 +169,16 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
   const posContext = useContext(POSContext);
   const { selectedStoreId, isOwner } = useOwnerStore();
 
-  const { data: cloudCreditLedger } = useCloudData('credit_ledger', (data) => {
-    return (data?.items || []).map(dbToLocalCreditEntry);
-  }, []);
-
-  const { data: cloudCreditPayments } = useCloudData('credit_payments', (data) => {
-    return (data?.items || []).map(dbToLocalCreditPayment);
-  }, []);
+  const { data: creditLedgerRows } = useCreditLedgerQuery();
+  const { data: creditPaymentsRows } = useCreditPaymentsQuery();
+  const cloudCreditLedger = useMemo(
+    () => (creditLedgerRows || []).map(dbToLocalCreditEntry),
+    [creditLedgerRows]
+  );
+  const cloudCreditPayments = useMemo(
+    () => (creditPaymentsRows || []).map(dbToLocalCreditPayment),
+    [creditPaymentsRows]
+  );
 
   const tables = posContext?.tables || [];
   const heldBills = posContext?.heldBills || [];
