@@ -38,8 +38,8 @@ import { useStore } from '@/contexts/StoreContext';
 import { useRealtime } from '@/contexts/RealtimeContext';
 import { onPosEvent } from '@/lib/posEvents';
 import { fetchCloudData, getCurrentStoreCode } from '@/hooks/useCloudData';
-import { dbToLocalMenuItem, dbToLocalCategory } from '@/lib/transformers';
-import type { MenuItem, Category } from '@/lib/store';
+import { dbToLocalMenuItem, dbToLocalCategory, dbToLocalOrder } from '@/lib/transformers';
+import type { MenuItem, Category, Order } from '@/lib/store';
 
 // ---------------------------------------------------------------------------
 // Query-key namespace — the single vocabulary the app uses to identify data.
@@ -89,6 +89,11 @@ async function fetchMenuItems(storeId: string): Promise<MenuItem[]> {
   return ((data?.items || []) as any[]).map((item) =>
     dbToLocalMenuItem(item, ingredients, variations),
   );
+}
+async function fetchOrders(storeId: string): Promise<Order[]> {
+  const storeCode = getCurrentStoreCode();
+  const data = await fetchCloudData('orders', storeId, storeCode);
+  return ((data?.orders || []) as any[]).map(dbToLocalOrder);
 }
 async function fetchProducts(storeId: string) {
   const { data, error } = await supabase
@@ -163,6 +168,10 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       onPosEvent('pos:order-created', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       onPosEvent('pos:order-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
+      onPosEvent('pos:order-completed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
+      onPosEvent('pos:order-cancelled', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       onPosEvent('pos:customer-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
@@ -258,6 +267,27 @@ export function useProductsQuery(opts?: QOpts<any[]>) {
     ...opts,
   });
 }
+
+// Slice 3: Orders — single owner for the orders read path. Consumers should
+// prefer this hook over ad-hoc `useCloudData('orders', ...)` calls so every
+// mount hits the same cache and every realtime/event invalidation reaches
+// every screen at once. Writes still flow through useSaveOrderMutation /
+// useOrderSync; this hook is strictly the read + cache surface.
+export function useOrdersQuery(opts?: QOpts<Order[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery<Order[]>({
+    queryKey: posQueryKeys.orders(activeStoreId),
+    queryFn: () => fetchOrders(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as Order[],
+    ...opts,
+  });
+}
+
 
 export function useCustomersQuery(opts?: QOpts<any[]>) {
   const { merchantId } = useMerchant();
