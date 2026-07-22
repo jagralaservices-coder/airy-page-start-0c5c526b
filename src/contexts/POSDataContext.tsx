@@ -288,6 +288,21 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
       onPosEvent('pos:kot-cancelled', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      // Slice 6: Held Bills + Offline Sync typed events → cache invalidation.
+      onPosEvent('pos:heldbill-created', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) })),
+      onPosEvent('pos:heldbill-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) })),
+      onPosEvent('pos:heldbill-deleted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) })),
+      onPosEvent('pos:sync-completed', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) });
+      }),
+      onPosEvent('pos:sync-failed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() })),
+      onPosEvent('pos:queue-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() })),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
