@@ -231,6 +231,9 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
       realtime.subscribe({ table: 'kot_items' }, () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      // Slice 6: Held Bills — realtime invalidation, single subscription owner.
+      realtime.subscribe({ table: 'held_bills', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) })),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
