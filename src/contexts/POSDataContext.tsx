@@ -250,10 +250,15 @@ export function useProductsQuery(opts?: QOpts<any[]>) {
     queryKey: posQueryKeys.products(merchantId, activeStoreId),
     queryFn: () => fetchProducts(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
     ...opts,
   });
 }
+
 export function useCustomersQuery(opts?: QOpts<any[]>) {
   const { merchantId } = useMerchant();
   return useQuery({
