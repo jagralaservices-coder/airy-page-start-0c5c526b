@@ -56,6 +56,18 @@ export function useSubscription() {
           }
         } catch {}
       }
+      // Fallback: resolve merchant via the assigned store (cashier/staff with no direct merchant link)
+      if (!merchantId && (userRole as any)?.store_id) {
+        try {
+          const { data: storeRow } = await (supabase as any)
+            .from('stores')
+            .select('merchant_id, business_type')
+            .eq('id', (userRole as any).store_id)
+            .maybeSingle();
+          if (storeRow?.merchant_id) merchantId = storeRow.merchant_id;
+          if (storeRow?.business_type) setBusinessType(storeRow.business_type as BusinessType);
+        } catch {}
+      }
 
       // Priority 1: merchant_subscription table (authoritative)
       if (merchantId) {
