@@ -166,6 +166,9 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       onPosEvent('pos:customer-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      onPosEvent('pos:products-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'products'] })),
+
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
