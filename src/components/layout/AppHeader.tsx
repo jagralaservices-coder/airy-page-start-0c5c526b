@@ -437,7 +437,14 @@ export const AppHeader: React.FC = () => {
                 <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
                   <User className="w-4 h-4 text-primary" />
                 </div>
-                <span className="text-sm font-medium hidden sm:block">{user?.user_metadata?.full_name || user?.email?.split('@')[0]}</span>
+                <div className="hidden sm:flex flex-col items-start leading-tight">
+                  <span className="text-sm font-medium">{user?.user_metadata?.full_name || user?.email?.split('@')[0]}</span>
+                  {userRole?.role && (
+                    <span className="text-[10px] text-muted-foreground capitalize">
+                      {userRole.role === 'store_manager' ? 'Manager' : userRole.role === 'super_admin' ? 'Super Admin' : userRole.role}
+                    </span>
+                  )}
+                </div>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
