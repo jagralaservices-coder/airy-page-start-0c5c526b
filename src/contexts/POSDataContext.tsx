@@ -1013,3 +1013,85 @@ export function useDashboardQuery(range: 'today' | 'week' | 'month' | 'all' = 't
 export function useAnalyticsSummaryQuery(range: 'today' | 'week' | 'month' | 'all' = 'today') {
   return useDashboardQuery(range);
 }
+
+// ---------------------------------------------------------------------------
+// Slice 9: Staff / Attendance / Leaves / Shifts / Payroll — query hooks.
+// Single owner for read models. Writes (create staff, check-in/out, leave
+// approve, shift close, payroll run) still live in their existing hooks and
+// edge functions; these hooks are strictly the read + cache surface.
+// Face verification, GPS, geo-fencing and camera flows are untouched.
+// ---------------------------------------------------------------------------
+export function useStaffQuery(opts?: QOpts<any[]>) {
+  const { merchantId } = useMerchant();
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.staff(merchantId, activeStoreId),
+    queryFn: () => fetchStaff(merchantId!, activeStoreId),
+    enabled: !!merchantId,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export interface AttendanceRange { start: string; end: string }
+export function useAttendanceQuery(range?: AttendanceRange, opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  const rangeKey = range ? `${range.start}_${range.end}` : 'all';
+  return useQuery({
+    queryKey: posQueryKeys.attendance(activeStoreId, rangeKey),
+    queryFn: () => fetchAttendance(activeStoreId!, range),
+    enabled: !!activeStoreId,
+    staleTime: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export function useLeavesQuery(opts?: QOpts<any[]>) {
+  const { merchantId } = useMerchant();
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.leaves(merchantId, activeStoreId),
+    queryFn: () => fetchLeaves(merchantId!, activeStoreId),
+    enabled: !!merchantId,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export function useShiftsQuery(opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.shifts(activeStoreId),
+    queryFn: () => fetchShifts(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export function usePayrollQuery(period?: string, opts?: QOpts<any[]>) {
+  const { merchantId } = useMerchant();
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.payroll(merchantId, activeStoreId, period),
+    queryFn: () => fetchPayroll(merchantId!, activeStoreId, period),
+    enabled: !!merchantId,
+    staleTime: 60_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
