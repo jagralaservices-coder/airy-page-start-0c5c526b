@@ -57,6 +57,14 @@ serve(async (req) => {
       )
     }
 
+    // Cashier accounts MUST be scoped to a store — reject if missing
+    if ((role || 'staff') === 'cashier' && !store_id) {
+      return new Response(
+        JSON.stringify({ error: 'A store must be selected when creating a cashier account' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Validate complete address fields
     if (!address_line1 || !locality || !city || !state || !pincode) {
       return new Response(
@@ -302,6 +310,8 @@ serve(async (req) => {
             .update({
               role: role || 'staff',
               customer_id: effectiveCustomerId,
+              merchant_id: effectiveCustomerId,
+              store_id: store_id,
               pin: staffPin,
               face_photo_url: face_photo_url || undefined,
               work_start_time: work_start_time || '09:00:00',
@@ -370,6 +380,7 @@ serve(async (req) => {
       user_id: userId,
       role: role || 'staff',
       customer_id: effectiveCustomerId,
+      merchant_id: effectiveCustomerId,
       store_id,
       pin: staffPin,
       is_active: true,
