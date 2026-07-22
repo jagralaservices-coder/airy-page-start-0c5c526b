@@ -261,6 +261,24 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       // Slice 6: Held Bills — realtime invalidation, single subscription owner.
       realtime.subscribe({ table: 'held_bills', filter }, () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) })),
+      // Slice 7: Customers — merchant-scoped. pos_customers.merchant_id filter
+      // keeps cross-store noise off the channel. RealtimeContext dedupes so
+      // repeat mounts share one connection.
+      ...(merchantId ? [
+        realtime.subscribe(
+          { table: 'pos_customers', filter: `merchant_id=eq.${merchantId}` },
+          () => queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) }),
+        ),
+      ] : []),
+      // Slice 7: Credit Ledger + Credit Payments — store-scoped invalidation
+      // hits both caches when either table changes so balance stays consistent.
+      realtime.subscribe({ table: 'credit_ledger', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      realtime.subscribe({ table: 'credit_payments', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
