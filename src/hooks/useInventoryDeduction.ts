@@ -18,7 +18,7 @@ interface OrderItem {
 export const useInventoryDeduction = () => {
   const { canAccess } = useSubscription();
   const hasRecipeDeduction = canAccess('recipeInventory');
-  
+
   /**
    * Deduct inventory for a completed order's items
    */
@@ -28,11 +28,11 @@ export const useInventoryDeduction = () => {
   ): Promise<{ success: boolean; lowStockItems: string[] }> => {
     const lowStockItems: string[] = [];
 
-    // Basic plan: no auto-deduction on sale
+    // Plan gate: only merchants whose plan includes recipe-based deduction
     if (!hasRecipeDeduction) {
       return { success: true, lowStockItems: [] };
     }
-    
+
     try {
       for (const item of items) {
         // Find linked ingredients for this menu item
@@ -44,9 +44,7 @@ export const useInventoryDeduction = () => {
         if (ingError || !ingredients || ingredients.length === 0) continue;
 
         for (const ingredient of ingredients) {
-          const totalDeduction = ingredient.quantity_required * item.quantity;
-
-          // Get current stock
+          // Get current stock (scoped to owner's store == active store)
           const { data: invItem, error: invError } = await supabase
             .from('inventory_items')
             .select('id, name, quantity, min_stock, unit')
@@ -56,26 +54,35 @@ export const useInventoryDeduction = () => {
 
           if (invError || !invItem) continue;
 
+          // Unit-mismatch guard — refuse silent bad math
+          if (ingredient.unit && invItem.unit && ingredient.unit !== invItem.unit) {
+            console.warn('[InventoryDeduction] Unit mismatch, skipping', {
+              menuItem: item.id,
+              inventoryItem: invItem.name,
+              recipeUnit: ingredient.unit,
+              stockUnit: invItem.unit,
+            });
+            continue;
+          }
+
+          const totalDeduction = Number(ingredient.quantity_required) * item.quantity;
           const newQuantity = Number(invItem.quantity) - totalDeduction;
 
-          // Update stock
           await supabase
             .from('inventory_items')
-            .update({ 
+            .update({
               quantity: newQuantity,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
             })
             .eq('id', invItem.id)
             .eq('store_id', storeId);
 
-          // Check low stock
           if (newQuantity <= Number(invItem.min_stock)) {
             lowStockItems.push(invItem.name);
           }
         }
       }
 
-      // Show low stock alerts
       if (lowStockItems.length > 0) {
         toast.warning(
           `Low Stock Alert: ${lowStockItems.slice(0, 3).join(', ')}${lowStockItems.length > 3 ? ` +${lowStockItems.length - 3} more` : ''}`,
@@ -88,7 +95,7 @@ export const useInventoryDeduction = () => {
       console.error('[InventoryDeduction] Error:', err);
       return { success: false, lowStockItems: [] };
     }
-  }, []);
+  }, [hasRecipeDeduction]);
 
   /**
    * Check all inventory items for low stock
