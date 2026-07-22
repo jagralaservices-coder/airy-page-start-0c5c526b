@@ -138,6 +138,15 @@ const crossInvalidateSlice1 = (
   } else if (dataType === 'held_bills') {
     // Slice 6: Held bills share a single POSDataContext cache.
     queryClient.invalidateQueries({ queryKey: ['pos', 'held-bills', storeId] });
+  } else if (dataType === 'pos_customers' || dataType === 'customers') {
+    // Slice 7: Customers cache is merchant-scoped; invalidate the whole
+    // customers namespace so every merchant scope refreshes.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'customers'] });
+  } else if (dataType === 'credit_ledger') {
+    queryClient.invalidateQueries({ queryKey: ['pos', 'credit-ledger', storeId] });
+  } else if (dataType === 'credit_payments') {
+    queryClient.invalidateQueries({ queryKey: ['pos', 'credit-payments', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['pos', 'credit-ledger', storeId] });
   }
   if (dataType === 'held_bills') {
     try {
@@ -172,6 +181,21 @@ const crossInvalidateSlice1 = (
   if (dataType === 'kot' || dataType === 'kot_tickets' || dataType === 'kot_items') {
     try {
       window.dispatchEvent(new CustomEvent('pos:kot-updated', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'pos_customers' || dataType === 'customers') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:customer-updated', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'credit_ledger') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:credit-updated', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'credit_payments') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:credit-payment-added', { detail: { storeId } }));
     } catch {}
   }
 };

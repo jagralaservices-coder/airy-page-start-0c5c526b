@@ -59,6 +59,9 @@ export const posQueryKeys = {
   recipes: (storeId: string | null) => ['pos', 'recipes', storeId] as const,
   heldBills: (storeId: string | null) => ['pos', 'held-bills', storeId] as const,
   offlineQueue: () => ['pos', 'offline-queue'] as const,
+  // Slice 7: Credit Ledger + Credit Payments — store-scoped ledger reads.
+  creditLedger: (storeId: string | null) => ['pos', 'credit-ledger', storeId] as const,
+  creditPayments: (storeId: string | null) => ['pos', 'credit-payments', storeId] as const,
 };
 
 export interface POSDataContextValue {
@@ -117,6 +120,30 @@ async function fetchProducts(storeId: string) {
 async function fetchCustomers(merchantId: string) {
   const { data, error } = await supabase
     .from('pos_customers').select('*').eq('merchant_id', merchantId);
+  if (error) throw error;
+  return data || [];
+}
+// Slice 7: Credit Ledger — store-scoped due sales with normalized columns.
+// Consumers should read via useCreditLedgerQuery so realtime + typed events
+// fan out from one cache. Writes still flow through POSContext credit
+// helpers / useSaveCloudDataMutation('credit_ledger'); this hook is strictly
+// the read + cache surface.
+async function fetchCreditLedger(storeId: string) {
+  const { data, error } = await supabase
+    .from('credit_ledger')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+// Slice 7: Credit Payments — store-scoped payments against ledger entries.
+async function fetchCreditPayments(storeId: string) {
+  const { data, error } = await supabase
+    .from('credit_payments')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return data || [];
 }
@@ -234,6 +261,24 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       // Slice 6: Held Bills — realtime invalidation, single subscription owner.
       realtime.subscribe({ table: 'held_bills', filter }, () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.heldBills(activeStoreId) })),
+      // Slice 7: Customers — merchant-scoped. pos_customers.merchant_id filter
+      // keeps cross-store noise off the channel. RealtimeContext dedupes so
+      // repeat mounts share one connection.
+      ...(merchantId ? [
+        realtime.subscribe(
+          { table: 'pos_customers', filter: `merchant_id=eq.${merchantId}` },
+          () => queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) }),
+        ),
+      ] : []),
+      // Slice 7: Credit Ledger + Credit Payments — store-scoped invalidation
+      // hits both caches when either table changes so balance stays consistent.
+      realtime.subscribe({ table: 'credit_ledger', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      realtime.subscribe({ table: 'credit_payments', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
@@ -272,6 +317,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       onPosEvent('pos:customer-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      onPosEvent('pos:customer-created', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      onPosEvent('pos:customer-deleted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      // Slice 7: Credit typed events → cache invalidation only.
+      onPosEvent('pos:credit-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      onPosEvent('pos:credit-payment-added', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      onPosEvent('pos:credit-cleared', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) });
+      }),
       onPosEvent('pos:products-updated', () =>
         queryClient.invalidateQueries({ queryKey: ['pos', 'products'] })),
       // Slice 5: Tables + KOT typed events → cache invalidation only. No
@@ -437,16 +499,61 @@ export function useOrdersQuery(opts?: QOpts<Order[]>) {
 }
 
 
+// Slice 7: Customers — single owner for the pos_customers read path.
+// Merchant-scoped so cashier/owner across all stores read from one cache.
+// Realtime + typed events fan out from POSDataProvider.
 export function useCustomersQuery(opts?: QOpts<any[]>) {
   const { merchantId } = useMerchant();
   return useQuery({
     queryKey: posQueryKeys.customers(merchantId),
     queryFn: () => fetchCustomers(merchantId!),
     enabled: !!merchantId,
-    staleTime: 30_000,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
     ...opts,
   });
 }
+
+// Slice 7: Credit Ledger — single owner for credit_ledger reads. Store-scoped
+// so balances match the active store. Writes still flow through POSContext
+// credit helpers / useSaveCloudDataMutation('credit_ledger'); this is strictly
+// the read + cache surface.
+export function useCreditLedgerQuery(opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.creditLedger(activeStoreId),
+    queryFn: () => fetchCreditLedger(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+// Slice 7: Credit Payments — single owner for credit_payments reads.
+// Store-scoped. Consumers can derive per-ledger payment history from this
+// cache without a second fetch.
+export function useCreditPaymentsQuery(opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.creditPayments(activeStoreId),
+    queryFn: () => fetchCreditPayments(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 10_000,
+    refetchInterval: 20_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
 // Slice 5: Tables — single owner for the restaurant tables read path.
 // Consumers (POSContext mirror, TablesView, KOT panel, transfer dialog)
 // should prefer this hook so every mount hits the same cache and every

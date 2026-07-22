@@ -26,6 +26,11 @@ export type PosEventName =
   | 'pos:order-completed'
   | 'pos:order-cancelled'
   | 'pos:customer-updated'
+  | 'pos:customer-created'
+  | 'pos:customer-deleted'
+  | 'pos:credit-updated'
+  | 'pos:credit-payment-added'
+  | 'pos:credit-cleared'
   | 'pos:attendance-updated'
   | 'pos:subscription-updated'
   // Slice 5: Tables + KOT typed events.
@@ -58,6 +63,11 @@ export interface PosEventPayloads {
   'pos:order-completed': { orderId?: string; storeId?: string | null } | void;
   'pos:order-cancelled': { orderId?: string; storeId?: string | null } | void;
   'pos:customer-updated': { customerId?: string } | void;
+  'pos:customer-created': { customerId?: string } | void;
+  'pos:customer-deleted': { customerId?: string } | void;
+  'pos:credit-updated': { creditId?: string; customerId?: string; storeId?: string | null } | void;
+  'pos:credit-payment-added': { creditId?: string; paymentId?: string; storeId?: string | null } | void;
+  'pos:credit-cleared': { creditId?: string; customerId?: string; storeId?: string | null } | void;
   'pos:attendance-updated': { staffId?: string } | void;
   'pos:subscription-updated': void;
   'pos:table-updated': { tableId?: string; storeId?: string | null } | void;
