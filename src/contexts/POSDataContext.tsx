@@ -307,6 +307,29 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
 
+  // Slice 6: Bridge legacy window events (`pos:queue-drained`, `online`,
+  // `offline`) into the typed pos: event bus so consumers only need one API.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onDrained = (e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      window.dispatchEvent(new CustomEvent('pos:sync-completed', {
+        detail: { storeId: activeStoreId, drained: detail.count },
+      }));
+      window.dispatchEvent(new CustomEvent('pos:queue-updated', { detail: {} }));
+    };
+    const onOnline = () => window.dispatchEvent(new CustomEvent('pos:sync-started', {
+      detail: { storeId: activeStoreId, reason: 'online' },
+    }));
+    window.addEventListener('pos:queue-drained', onDrained);
+    window.addEventListener('online', onOnline);
+    return () => {
+      window.removeEventListener('pos:queue-drained', onDrained);
+      window.removeEventListener('online', onOnline);
+    };
+  }, [activeStoreId]);
+
+
   const invalidate = useCallback(async (slice?: keyof typeof posQueryKeys | 'all') => {
     if (!slice || slice === 'all') {
       await queryClient.invalidateQueries({ queryKey: posQueryKeys.all });
