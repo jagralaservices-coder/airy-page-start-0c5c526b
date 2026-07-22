@@ -295,12 +295,12 @@ serve(async (req) => {
           )
         }
         
-        // Check if user already has a role for this store
+        // Check if user already has this role (unique constraint is user_id + role)
         const { data: existingRole } = await supabaseAdmin
           .from('user_roles')
           .select('id')
           .eq('user_id', userId)
-          .eq('store_id', store_id)
+          .eq('role', role || 'staff')
           .maybeSingle()
         
         if (existingRole) {
