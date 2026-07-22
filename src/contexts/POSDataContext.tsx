@@ -215,6 +215,14 @@ async function fetchRecipes(storeId: string): Promise<RecipeComponent[]> {
   if (error) throw error;
   return (data || []) as RecipeComponent[];
 }
+// Slice 8: Expenses — store-scoped rows via sync-store-data edge function
+// so payload shape / RLS behaviour is identical to legacy useCloudData path.
+async function fetchExpenses(storeId: string): Promise<any[]> {
+  const storeCode = getCurrentStoreCode();
+  const data = await fetchCloudData('expenses', storeId, storeCode);
+  return (data?.items || []) as any[];
+}
+
 
 
 // ---------------------------------------------------------------------------
