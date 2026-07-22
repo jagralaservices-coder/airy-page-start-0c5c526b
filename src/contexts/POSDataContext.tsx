@@ -385,6 +385,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
         queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
       }),
+      // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll — realtime
+      // read-model invalidation only. Business logic (check-in, face
+      // verification, GPS, leave approval, payroll runs) is untouched.
+      // `staff` and `leave_requests` are merchant-scoped in schema; we
+      // subscribe without a store filter and let the cache key scope reads.
+      ...(merchantId ? [
+        realtime.subscribe({ table: 'staff', filter: `merchant_id=eq.${merchantId}` }, () =>
+          queryClient.invalidateQueries({ queryKey: ['pos', 'staff', merchantId] })),
+        realtime.subscribe({ table: 'leave_requests' as any, filter: `merchant_id=eq.${merchantId}` }, () =>
+          queryClient.invalidateQueries({ queryKey: ['pos', 'leaves', merchantId] })),
+        realtime.subscribe({ table: 'payroll' as any, filter: `merchant_id=eq.${merchantId}` }, () =>
+          queryClient.invalidateQueries({ queryKey: ['pos', 'payroll', merchantId] })),
+      ] : []),
+      realtime.subscribe({ table: 'staff_attendance', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'attendance', activeStoreId] })),
+      realtime.subscribe({ table: 'cashier_shifts', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.shifts(activeStoreId) })),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
