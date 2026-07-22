@@ -37,6 +37,9 @@ import { useMerchant } from '@/contexts/MerchantContext';
 import { useStore } from '@/contexts/StoreContext';
 import { useRealtime } from '@/contexts/RealtimeContext';
 import { onPosEvent } from '@/lib/posEvents';
+import { fetchCloudData, getCurrentStoreCode } from '@/hooks/useCloudData';
+import { dbToLocalMenuItem, dbToLocalCategory } from '@/lib/transformers';
+import type { MenuItem, Category } from '@/lib/store';
 
 // ---------------------------------------------------------------------------
 // Query-key namespace — the single vocabulary the app uses to identify data.
@@ -71,17 +74,21 @@ const POSDataContext = createContext<POSDataContextValue | undefined>(undefined)
 // these tables directly; use the hooks below so every consumer benefits from
 // dedup + realtime invalidation.
 // ---------------------------------------------------------------------------
-async function fetchCategories(storeId: string) {
-  const { data, error } = await supabase
-    .from('categories').select('*').eq('store_id', storeId).order('name');
-  if (error) throw error;
-  return data || [];
+async function fetchCategories(storeId: string): Promise<Category[]> {
+  // Route through the same edge function POSContext previously used via
+  // useCloudData so payload shape / RLS behaviour is identical.
+  const storeCode = getCurrentStoreCode();
+  const data = await fetchCloudData('categories', storeId, storeCode);
+  return ((data?.items || []) as any[]).map(dbToLocalCategory);
 }
-async function fetchMenuItems(storeId: string) {
-  const { data, error } = await supabase
-    .from('menu_items').select('*').eq('store_id', storeId);
-  if (error) throw error;
-  return data || [];
+async function fetchMenuItems(storeId: string): Promise<MenuItem[]> {
+  const storeCode = getCurrentStoreCode();
+  const data = await fetchCloudData('menu_items', storeId, storeCode);
+  const ingredients = data?.ingredients || [];
+  const variations = data?.variations || [];
+  return ((data?.items || []) as any[]).map((item) =>
+    dbToLocalMenuItem(item, ingredients, variations),
+  );
 }
 async function fetchProducts(storeId: string) {
   const { data, error } = await supabase
@@ -205,23 +212,31 @@ export function usePOSDataSafe(): POSDataContextValue | null {
 // ---------------------------------------------------------------------------
 type QOpts<T> = Omit<UseQueryOptions<T, Error, T, any>, 'queryKey' | 'queryFn'>;
 
-export function useCategoriesQuery(opts?: QOpts<any[]>) {
+export function useCategoriesQuery(opts?: QOpts<Category[]>) {
   const { activeStoreId } = useStore();
-  return useQuery({
+  return useQuery<Category[]>({
     queryKey: posQueryKeys.categories(activeStoreId),
     queryFn: () => fetchCategories(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as Category[],
     ...opts,
   });
 }
-export function useMenuItemsQuery(opts?: QOpts<any[]>) {
+export function useMenuItemsQuery(opts?: QOpts<MenuItem[]>) {
   const { activeStoreId } = useStore();
-  return useQuery({
+  return useQuery<MenuItem[]>({
     queryKey: posQueryKeys.menuItems(activeStoreId),
     queryFn: () => fetchMenuItems(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as MenuItem[],
     ...opts,
   });
 }

@@ -95,6 +95,28 @@ export const useUpdateOrderMutation = () => {
   });
 };
 
+// Slice 1 bridge: cross-invalidate the POSDataContext React Query cache
+// (['pos','menu-items'|'categories', storeId]) whenever legacy cloudData
+// mutations touch menu_items or categories, and emit `pos:menu-updated`
+// so every consumer refreshes without a manual signal.
+const crossInvalidateSlice1 = (
+  queryClient: ReturnType<typeof useQueryClient>,
+  storeId: string | null,
+  dataType: string,
+) => {
+  queryClient.invalidateQueries({ queryKey: ['cloudData', storeId, dataType] });
+  if (dataType === 'menu_items') {
+    queryClient.invalidateQueries({ queryKey: ['pos', 'menu-items', storeId] });
+  } else if (dataType === 'categories') {
+    queryClient.invalidateQueries({ queryKey: ['pos', 'categories', storeId] });
+  }
+  if (dataType === 'menu_items' || dataType === 'categories') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:menu-updated', { detail: { storeId } }));
+    } catch {}
+  }
+};
+
 // Generic mutation for store data (inventory, expenses, held_bills, categories, pos_customers)
 export const useSaveCloudDataMutation = (dataType: string) => {
   const queryClient = useQueryClient();
@@ -105,7 +127,7 @@ export const useSaveCloudDataMutation = (dataType: string) => {
       return mutateCloudData('save', dataType, { items });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cloudData', storeId, dataType] });
+      crossInvalidateSlice1(queryClient, storeId, dataType);
     },
   });
 };
@@ -119,7 +141,7 @@ export const useUpdateCloudDataMutation = (dataType: string) => {
       return mutateCloudData('update', dataType, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cloudData', storeId, dataType] });
+      crossInvalidateSlice1(queryClient, storeId, dataType);
     },
   });
 };
@@ -133,7 +155,7 @@ export const useDeleteCloudDataMutation = (dataType: string) => {
       return mutateCloudData('delete', dataType, { item_ids: itemIds });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cloudData', storeId, dataType] });
+      crossInvalidateSlice1(queryClient, storeId, dataType);
     },
   });
 };
