@@ -505,6 +505,20 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
         queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
       }),
+      // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll typed events.
+      // Handlers only invalidate — never imperatively refetch — so writers
+      // (check-in, leave approve, shift close, payroll run) emit and every
+      // subscribed screen refreshes from one cache.
+      onPosEvent('pos:staff-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'staff', merchantId] })),
+      onPosEvent('pos:attendance-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'attendance', activeStoreId] })),
+      onPosEvent('pos:leave-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'leaves', merchantId] })),
+      onPosEvent('pos:shift-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.shifts(activeStoreId) })),
+      onPosEvent('pos:payroll-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'payroll', merchantId] })),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
