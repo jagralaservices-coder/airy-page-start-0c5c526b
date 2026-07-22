@@ -1796,7 +1796,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (inventoryUpdated) {
       setInventory(currentInventory);
       window.dispatchEvent(new Event('storage'));
+      try {
+        const { emitPosEvent } = await import('@/lib/posEvents');
+        emitPosEvent('pos:inventory-adjusted');
+      } catch {}
     }
+
 
     if (stockChanges.length > 0) {
       toast.success('Menu Stock Restored', {
