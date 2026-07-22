@@ -393,13 +393,40 @@ export function useCustomersQuery(opts?: QOpts<any[]>) {
     ...opts,
   });
 }
+// Slice 5: Tables — single owner for the restaurant tables read path.
+// Consumers (POSContext mirror, TablesView, KOT panel, transfer dialog)
+// should prefer this hook so every mount hits the same cache and every
+// realtime/event invalidation reaches every screen at once. Writes still
+// flow through useSaveCloudDataMutation('tables') / POSContext table ops.
 export function useTablesQuery(opts?: QOpts<any[]>) {
   const { activeStoreId } = useStore();
   return useQuery({
     queryKey: posQueryKeys.tables(activeStoreId),
     queryFn: () => fetchTables(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+// Slice 5: KOT — single owner for the kitchen order ticket read path.
+// KOT generation logic (kot numbering, printing) is untouched and still
+// lives in POSContext; this hook is strictly the read + cache surface for
+// kitchen-facing consumers. Empty until a KOT surface subscribes.
+export function useKOTQuery(opts?: QOpts<KOTTicket[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery<KOTTicket[]>({
+    queryKey: posQueryKeys.kot(activeStoreId),
+    queryFn: () => fetchKOT(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as KOTTicket[],
     ...opts,
   });
 }
