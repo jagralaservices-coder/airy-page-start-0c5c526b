@@ -121,6 +121,13 @@ const crossInvalidateSlice1 = (
     // Slice 2: products cache is keyed by (merchantId, storeId). Invalidate
     // the whole products namespace so every merchant scope refreshes.
     queryClient.invalidateQueries({ queryKey: ['pos', 'products'] });
+  } else if (dataType === 'inventory' || dataType === 'inventory_items') {
+    // Slice 4: inventory + recipes share the same store scope.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'inventory', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['pos', 'recipes', storeId] });
+  } else if (dataType === 'inventory_components' || dataType === 'recipes') {
+    queryClient.invalidateQueries({ queryKey: ['pos', 'recipes', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['pos', 'inventory', storeId] });
   }
   if (dataType === 'menu_items' || dataType === 'categories') {
     try {
@@ -132,7 +139,18 @@ const crossInvalidateSlice1 = (
       window.dispatchEvent(new CustomEvent('pos:products-updated', { detail: { storeId } }));
     } catch {}
   }
+  if (dataType === 'inventory' || dataType === 'inventory_items') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:inventory-updated', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'inventory_components' || dataType === 'recipes') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:recipe-updated', { detail: { storeId } }));
+    } catch {}
+  }
 };
+
 
 
 // Generic mutation for store data (inventory, expenses, held_bills, categories, pos_customers)
