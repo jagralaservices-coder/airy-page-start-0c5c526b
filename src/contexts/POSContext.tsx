@@ -439,12 +439,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (categoriesData) setCategoriesState(categoriesData as Category[]);
   }, [categoriesData]);
 
-  const { data: ordersData } = useCloudData('orders', (data) => {
-    return (data?.orders || []).map(dbToLocalOrder);
-  }, []);
-
+  // Slice 3 (Phase 2C): Orders are now owned by POSDataContext.
+  // Mirror the shared React-Query cache into legacy `orders` state so every
+  // existing consumer of usePOSContext().orders keeps working unchanged.
+  const { data: ordersData } = useOrdersQuery();
   useEffect(() => {
-    if (ordersData) setOrdersState(ordersData);
+    if (ordersData) setOrdersState(ordersData as Order[]);
   }, [ordersData]);
 
   const { data: heldBillsData } = useCloudData('held_bills', (data) => {
