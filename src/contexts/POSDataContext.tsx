@@ -174,11 +174,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       realtime.subscribe({ table: 'restaurant_tables', filter }, () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.tables(activeStoreId) })),
-      realtime.subscribe({ table: 'inventory_items', filter }, () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      realtime.subscribe({ table: 'inventory_items', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
+      // inventory_components has no store_id column, so subscribe without a
+      // filter and invalidate the store-scoped recipes cache. RealtimeContext
+      // dedupes channels so this stays a single connection.
+      realtime.subscribe({ table: 'inventory_components' }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
+      }),
+      // inventory_transactions logs (audit) also implies stock changed.
+      realtime.subscribe({ table: 'inventory_transactions', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
+
 
   // Cross-hook event bus → cache invalidation.
   React.useEffect(() => {
