@@ -239,23 +239,27 @@ export const QROrdersPanel: React.FC = () => {
             }));
 
             const billNumber = `QR-${order.order_number}`;
-            const { error: insertError } = await supabase.from('orders').insert({
-              store_id: storeId,
-              bill_number: billNumber,
-              items: enrichedItems as any,
-              subtotal: order.subtotal,
-              tax: order.tax,
-              discount: 0,
-              total: order.total,
-              payment_method: 'cash',
-              status: 'completed',
-              order_type: 'qr',
-              customer_name: order.customer_name || null,
-              customer_phone: order.customer_phone || null,
-              table_number: order.table_number || null,
-              created_at: order.created_at,
-            });
-            
+            const { data: insertedOrder, error: insertError } = await supabase
+              .from('orders')
+              .insert({
+                store_id: storeId,
+                bill_number: billNumber,
+                items: enrichedItems as any,
+                subtotal: order.subtotal,
+                tax: order.tax,
+                discount: 0,
+                total: order.total,
+                payment_method: 'cash',
+                status: 'completed',
+                order_type: 'qr',
+                customer_name: order.customer_name || null,
+                customer_phone: order.customer_phone || null,
+                table_number: order.table_number || null,
+                created_at: order.created_at,
+              })
+              .select('id')
+              .single();
+
             if (insertError) {
               console.error(`[QROrders] ❌ Failed to insert QR-${order.order_number} into orders:`, insertError);
               toast.error(`Failed to add QR order to sales: ${insertError.message}`);
@@ -263,7 +267,7 @@ export const QROrdersPanel: React.FC = () => {
               console.log(`[QROrders] ✅ Order QR-${order.order_number} pushed to sales with categories`);
               toast.success(`QR Order #${order.order_number} added to sales reports`);
 
-              // Deduct inventory for QR order items
+              // Deduct inventory for QR order items (linked to inserted order for audit trail)
               try {
                 const itemsForDeduction = enrichedItems.map((item: any) => ({
                   id: item.id || item.name,
@@ -271,8 +275,12 @@ export const QROrdersPanel: React.FC = () => {
                   quantity: item.quantity || 1,
                   category: item.category,
                 }));
-                await deductInventoryForOrder(storeId, itemsForDeduction);
-                console.log(`[QROrders] 📦 Inventory deducted for QR-${order.order_number}`);
+                await deductInventoryForOrder(
+                  storeId,
+                  itemsForDeduction,
+                  insertedOrder?.id
+                );
+                console.log(`[QROrders] 📦 Inventory deducted for QR-${order.order_number} (order_id: ${insertedOrder?.id})`);
               } catch (invErr) {
                 console.error('[QROrders] Inventory deduction error:', invErr);
               }
