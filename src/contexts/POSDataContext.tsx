@@ -520,3 +520,80 @@ export function useRecipesQuery(opts?: QOpts<RecipeComponent[]>) {
   });
 }
 
+// Slice 6: Held Bills — single owner for the held-bills read path. Consumers
+// should prefer this hook over ad-hoc useCloudData('held_bills', ...) calls
+// so every mount hits the same cache and every realtime/event invalidation
+// reaches every screen at once. Writes still flow through POSContext
+// (holdBill / mergeBills / deleteHeldBill) which emits pos:heldbill-* events.
+export function useHeldBillsQuery(opts?: QOpts<HeldBill[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery<HeldBill[]>({
+    queryKey: posQueryKeys.heldBills(activeStoreId),
+    queryFn: () => fetchHeldBills(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as HeldBill[],
+    ...opts,
+  });
+}
+
+// Slice 6: Offline Queue — single reader surface over the existing sync
+// engine (src/lib/syncQueue + src/lib/syncEngine). Wraps queueStats +
+// listPoisoned into one React Query cache so every panel/badge reads from
+// one place. Auto-invalidates on pos:sync-* and pos:queue-updated events
+// (bridged from legacy `pos:queue-drained`/`online` in the provider above).
+// Engine internals (retry, backoff, persistence, leader lock, conflict
+// resolution) are unchanged — this hook is strictly the read + control
+// surface.
+export interface OfflineQueueSnapshot {
+  stats: Awaited<ReturnType<typeof queueStats>> | null;
+  poisoned: Awaited<ReturnType<typeof listPoisoned>>;
+  pending: number;
+  processing: number;
+  failed: number;
+  isOnline: boolean;
+}
+async function fetchOfflineQueue(): Promise<OfflineQueueSnapshot> {
+  const [stats, poisoned] = await Promise.all([queueStats(), listPoisoned()]);
+  return {
+    stats,
+    poisoned,
+    pending: (stats as any)?.pending ?? 0,
+    processing: (stats as any)?.processing ?? 0,
+    failed: poisoned.length,
+    isOnline: typeof navigator === 'undefined' ? true : navigator.onLine,
+  };
+}
+export function useOfflineQueue(opts?: QOpts<OfflineQueueSnapshot>) {
+  const queryClient = useQueryClient();
+  const query = useQuery<OfflineQueueSnapshot>({
+    queryKey: posQueryKeys.offlineQueue(),
+    queryFn: fetchOfflineQueue,
+    staleTime: 3_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: {
+      stats: null, poisoned: [], pending: 0, processing: 0, failed: 0,
+      isOnline: typeof navigator === 'undefined' ? true : navigator.onLine,
+    },
+    ...opts,
+  });
+  const retry = useCallback(async (id: number) => {
+    await retryPoisoned(id);
+    await queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() });
+  }, [queryClient]);
+  const discard = useCallback(async (id: number) => {
+    await discardPoisoned(id);
+    await queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() });
+  }, [queryClient]);
+  const refresh = useCallback(() =>
+    queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() }),
+    [queryClient]);
+  return { ...query, retry, discard, refresh };
+}
+
+
