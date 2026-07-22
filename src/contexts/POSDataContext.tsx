@@ -113,6 +113,30 @@ async function fetchTables(storeId: string) {
   if (error) throw error;
   return data || [];
 }
+// Slice 5: KOT tickets + items scoped to the active store. Kitchen-facing
+// consumers should read via useKOTQuery instead of touching supabase directly
+// so realtime invalidations fan out to every screen from one cache.
+export interface KOTTicket {
+  id: string;
+  order_id: string | null;
+  table_id: string | null;
+  store_id: string;
+  status: string;
+  kot_number: number | null;
+  created_at: string;
+  updated_at: string | null;
+  items?: any[];
+}
+async function fetchKOT(storeId: string): Promise<KOTTicket[]> {
+  const { data, error } = await supabase
+    .from('kot_tickets')
+    .select('*, items:kot_items(*)')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data || []) as any as KOTTicket[];
+}
 async function fetchInventory(storeId: string) {
   const { data, error } = await supabase
     .from('inventory_items').select('*').eq('store_id', storeId);
