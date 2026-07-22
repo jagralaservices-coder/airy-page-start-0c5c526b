@@ -424,22 +424,18 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // --- Cloud Data React Query Bridges ---
-  const { data: menuItemsData } = useCloudData('menu_items', (data) => {
-    const ingredients = data?.ingredients || [];
-    const variations = data?.variations || [];
-    return (data?.items || []).map((item: any) => dbToLocalMenuItem(item, ingredients, variations));
-  }, []);
-
+  // Slice 1 (Phase 2C): Categories + Menu Items are now owned by
+  // POSDataContext. We consume the shared React-Query cache and mirror the
+  // result into local state so every existing `usePOSContext().menuItems /
+  // categories` consumer keeps working with zero changes.
+  const { data: menuItemsData } = useMenuItemsQuery();
   useEffect(() => {
-    if (menuItemsData) setMenuItemsState(menuItemsData);
+    if (menuItemsData) setMenuItemsState(menuItemsData as MenuItem[]);
   }, [menuItemsData]);
 
-  const { data: categoriesData } = useCloudData('categories', (data) => {
-    return (data?.items || []).map(dbToLocalCategory);
-  }, []);
-
+  const { data: categoriesData } = useCategoriesQuery();
   useEffect(() => {
-    if (categoriesData) setCategoriesState(categoriesData);
+    if (categoriesData) setCategoriesState(categoriesData as Category[]);
   }, [categoriesData]);
 
   const { data: ordersData } = useCloudData('orders', (data) => {
