@@ -187,7 +187,7 @@ export const InventoryView: React.FC = () => {
 
   // Render sub-views
   if (activeView === 'purchaseManagement') {
-    return <PurchaseManagementView onBack={() => setActiveView('main')} onNavigate={(view) => setActiveView(view)} />;
+    return <PurchaseManagementView onBack={() => setActiveView('main')} onNavigate={(view) => setActiveView(view as any)} />;
   }
   if (activeView === 'requestForPurchase') {
     return <RequestForPurchaseView onBack={() => setActiveView('main')} />;
