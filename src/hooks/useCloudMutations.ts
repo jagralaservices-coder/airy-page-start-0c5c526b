@@ -147,6 +147,12 @@ const crossInvalidateSlice1 = (
   } else if (dataType === 'credit_payments') {
     queryClient.invalidateQueries({ queryKey: ['pos', 'credit-payments', storeId] });
     queryClient.invalidateQueries({ queryKey: ['pos', 'credit-ledger', storeId] });
+  } else if (dataType === 'expenses') {
+    // Slice 8: expenses invalidate their own cache + derived dashboard/analytics/reports.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'expenses', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', storeId] });
+    queryClient.invalidateQueries({ queryKey: ['pos', 'reports', storeId] });
   }
   if (dataType === 'held_bills') {
     try {
@@ -196,6 +202,11 @@ const crossInvalidateSlice1 = (
   if (dataType === 'credit_payments') {
     try {
       window.dispatchEvent(new CustomEvent('pos:credit-payment-added', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'expenses') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:expense-updated', { detail: { storeId } }));
     } catch {}
   }
 };

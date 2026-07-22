@@ -62,6 +62,13 @@ export const posQueryKeys = {
   // Slice 7: Credit Ledger + Credit Payments — store-scoped ledger reads.
   creditLedger: (storeId: string | null) => ['pos', 'credit-ledger', storeId] as const,
   creditPayments: (storeId: string | null) => ['pos', 'credit-payments', storeId] as const,
+  // Slice 8: Expenses, Reports, Dashboard, Analytics.
+  expenses: (storeId: string | null) => ['pos', 'expenses', storeId] as const,
+  reports: (storeId: string | null, reportType: string, start: string, end: string, extra?: string) =>
+    ['pos', 'reports', storeId, reportType, start, end, extra ?? ''] as const,
+  dashboard: (storeId: string | null, range: string) => ['pos', 'dashboard', storeId, range] as const,
+  analyticsSummary: (storeId: string | null, range: string) =>
+    ['pos', 'analytics', storeId, range] as const,
 };
 
 export interface POSDataContextValue {
@@ -208,6 +215,14 @@ async function fetchRecipes(storeId: string): Promise<RecipeComponent[]> {
   if (error) throw error;
   return (data || []) as RecipeComponent[];
 }
+// Slice 8: Expenses — store-scoped rows via sync-store-data edge function
+// so payload shape / RLS behaviour is identical to legacy useCloudData path.
+async function fetchExpenses(storeId: string): Promise<any[]> {
+  const storeCode = getCurrentStoreCode();
+  const data = await fetchCloudData('expenses', storeId, storeCode);
+  return (data?.items || []) as any[];
+}
+
 
 
 // ---------------------------------------------------------------------------
@@ -278,6 +293,14 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       realtime.subscribe({ table: 'credit_payments', filter }, () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
         queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      // Slice 8: Expenses — store-scoped. Changes also invalidate derived
+      // dashboard/analytics caches so KPIs recompute from one source.
+      realtime.subscribe({ table: 'expenses', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.expenses(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
       }),
     ];
     return () => subs.forEach((u) => u());
@@ -365,6 +388,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() })),
       onPosEvent('pos:queue-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.offlineQueue() })),
+      // Slice 8: Expenses + derived reports/dashboard/analytics.
+      onPosEvent('pos:expense-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.expenses(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+      }),
+      onPosEvent('pos:reports-refreshed', () => {
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+      }),
+      // Order lifecycle events also affect derived report/dashboard caches.
+      onPosEvent('pos:order-completed', () => {
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+      }),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
@@ -704,3 +744,158 @@ export function useOfflineQueue(opts?: QOpts<OfflineQueueSnapshot>) {
 }
 
 
+
+// ---------------------------------------------------------------------------
+// Slice 8: Expenses, Reports, Dashboard, Analytics
+// ---------------------------------------------------------------------------
+
+// Expenses — single owner for the expenses read path. Consumers should prefer
+// this hook over ad-hoc useCloudData('expenses', ...) calls so every mount
+// hits the same cache and every realtime/event invalidation reaches every
+// screen at once. Writes still flow through useSaveCloudDataMutation('expenses')
+// / POSContext expense helpers; this hook is strictly the read + cache surface.
+export function useExpensesQuery(opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.expenses(activeStoreId),
+    queryFn: () => fetchExpenses(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+// Reports — thin cache wrapper around the report RPCs. Each (reportType,
+// dateRange) tuple gets its own cache entry so multiple report panels
+// mounted concurrently share results and dedupe fetches. Realtime + typed
+// events (orders, expenses) invalidate the whole ['pos','reports',storeId]
+// namespace so numbers stay consistent without imperative refetch.
+export interface ReportRange { start: Date; end: Date }
+async function fetchReportRpc(
+  reportType: string,
+  storeId: string,
+  range: ReportRange,
+  extra?: { granularity?: string; customerId?: string },
+): Promise<any> {
+  const startDate = range.start.toISOString().split('T')[0];
+  const endDate = range.end.toISOString().split('T')[0];
+  const fnMap: Record<string, string> = {
+    pl: 'get_pl_report',
+    salesTrend: 'get_sales_trends',
+    hourly: 'get_hourly_sales',
+    customer: 'get_customer_analytics',
+    table: 'get_table_performance',
+    orderBehavior: 'get_order_behavior',
+    payment: 'get_payment_breakdown',
+    tax: 'get_tax_report',
+    discount: 'get_discount_report',
+    lossControl: 'get_loss_control_report',
+    itemPerformance: 'get_item_performance',
+    retention: 'get_customer_retention',
+    targetAchievement: 'get_target_achievement',
+    kitchen: 'get_kitchen_performance',
+    delivery: 'get_delivery_performance',
+    invoice: 'get_invoice_report',
+  };
+  if (reportType === 'multiOutlet') {
+    const { data, error } = await (supabase as any).rpc('get_multi_outlet_report', {
+      p_customer_id: extra?.customerId || storeId,
+      p_start_date: startDate,
+      p_end_date: endDate,
+    });
+    if (error) throw error;
+    return data;
+  }
+  const fnName = fnMap[reportType];
+  if (!fnName) return null;
+  const params: any = { p_store_id: storeId, p_start_date: startDate, p_end_date: endDate };
+  if (reportType === 'salesTrend' && extra?.granularity) params.p_granularity = extra.granularity;
+  const { data, error } = await (supabase as any).rpc(fnName, params);
+  if (error) throw error;
+  return data;
+}
+export function useReportsQuery(
+  reportType: string | null,
+  range: ReportRange | null,
+  extra?: { granularity?: string; customerId?: string },
+  opts?: QOpts<any>,
+) {
+  const { activeStoreId } = useStore();
+  const startKey = range?.start.toISOString().split('T')[0] ?? '';
+  const endKey = range?.end.toISOString().split('T')[0] ?? '';
+  const extraKey = extra?.granularity || extra?.customerId || '';
+  return useQuery({
+    queryKey: posQueryKeys.reports(activeStoreId, reportType ?? '', startKey, endKey, extraKey),
+    queryFn: () => fetchReportRpc(reportType!, activeStoreId!, range!, extra),
+    enabled: !!activeStoreId && !!reportType && !!range,
+    staleTime: 30_000,
+    // Reports are expensive — do NOT poll; rely on typed-event invalidation.
+    refetchOnWindowFocus: false,
+    ...opts,
+  });
+}
+
+// Dashboard — derived KPI snapshot computed from the shared orders + expenses
+// caches. Zero extra fetches: `select` runs against React Query's existing
+// data so consumers subscribe to one cache and derive their own view.
+export interface DashboardSnapshot {
+  totalSales: number;
+  totalOrders: number;
+  totalExpenses: number;
+  netProfit: number;
+  avgOrderValue: number;
+  cashSales: number;
+  cardSales: number;
+  upiSales: number;
+  dueSales: number;
+}
+function rangeFilter(range: 'today' | 'week' | 'month' | 'all'): (d: Date) => boolean {
+  if (range === 'all') return () => true;
+  const now = new Date();
+  const start = new Date(now);
+  if (range === 'today') start.setHours(0, 0, 0, 0);
+  else if (range === 'week') { start.setDate(now.getDate() - 7); start.setHours(0, 0, 0, 0); }
+  else if (range === 'month') { start.setDate(1); start.setHours(0, 0, 0, 0); }
+  return (d: Date) => d >= start;
+}
+export function useDashboardQuery(range: 'today' | 'week' | 'month' | 'all' = 'today') {
+  const { activeStoreId } = useStore();
+  const orders = useOrdersQuery();
+  const expenses = useExpensesQuery();
+  return useMemo<DashboardSnapshot>(() => {
+    const inRange = rangeFilter(range);
+    const os = (orders.data || []).filter((o: any) => {
+      const t = new Date(o.createdAt || o.created_at || 0);
+      return inRange(t) && (o.status !== 'cancelled');
+    });
+    const es = (expenses.data || []).filter((e: any) => inRange(new Date(e.date || e.created_at || 0)));
+    const totalSales = os.reduce((s, o: any) => s + Number(o.total || 0), 0);
+    const totalExpenses = es.reduce((s, e: any) => s + Number(e.amount || 0), 0);
+    const totalOrders = os.length;
+    const sumBy = (m: string) => os
+      .filter((o: any) => (o.paymentMethod || o.payment_method) === m)
+      .reduce((s, o: any) => s + Number(o.total || 0), 0);
+    return {
+      totalSales,
+      totalOrders,
+      totalExpenses,
+      netProfit: totalSales - totalExpenses,
+      avgOrderValue: totalOrders ? totalSales / totalOrders : 0,
+      cashSales: sumBy('cash'),
+      cardSales: sumBy('card'),
+      upiSales: sumBy('upi'),
+      dueSales: sumBy('due'),
+    };
+  }, [orders.data, expenses.data, range, activeStoreId]);
+}
+
+// Analytics summary — same shape/model as useAnalytics but sourced from the
+// shared cache so multiple analytics panels don't each trigger their own
+// fetch. This is intentionally a derived selector, not a new fetch.
+export function useAnalyticsSummaryQuery(range: 'today' | 'week' | 'month' | 'all' = 'today') {
+  return useDashboardQuery(range);
+}

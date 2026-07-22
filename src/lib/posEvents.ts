@@ -47,7 +47,10 @@ export type PosEventName =
   | 'pos:sync-started'
   | 'pos:sync-completed'
   | 'pos:sync-failed'
-  | 'pos:queue-updated';
+  | 'pos:queue-updated'
+  // Slice 8: Expenses + Reports/Dashboard/Analytics derived caches.
+  | 'pos:expense-updated'
+  | 'pos:reports-refreshed';
 
 export interface PosEventPayloads {
   'pos:store-changed': { storeId: string | null } | void;
@@ -84,6 +87,9 @@ export interface PosEventPayloads {
   'pos:sync-completed': { storeId?: string | null; drained?: number } | void;
   'pos:sync-failed': { storeId?: string | null; error?: string } | void;
   'pos:queue-updated': { pending?: number; poisoned?: number } | void;
+  // Slice 8: Expenses + derived cache refresh events.
+  'pos:expense-updated': { expenseId?: string; storeId?: string | null } | void;
+  'pos:reports-refreshed': { storeId?: string | null; reportType?: string } | void;
 }
 
 
