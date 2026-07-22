@@ -69,6 +69,16 @@ export const posQueryKeys = {
   dashboard: (storeId: string | null, range: string) => ['pos', 'dashboard', storeId, range] as const,
   analyticsSummary: (storeId: string | null, range: string) =>
     ['pos', 'analytics', storeId, range] as const,
+  // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll read models.
+  staff: (merchantId: string | null, storeId: string | null) =>
+    ['pos', 'staff', merchantId, storeId] as const,
+  attendance: (storeId: string | null, range?: string) =>
+    ['pos', 'attendance', storeId, range ?? 'all'] as const,
+  leaves: (merchantId: string | null, storeId: string | null) =>
+    ['pos', 'leaves', merchantId, storeId] as const,
+  shifts: (storeId: string | null) => ['pos', 'shifts', storeId] as const,
+  payroll: (merchantId: string | null, storeId: string | null, period?: string) =>
+    ['pos', 'payroll', merchantId, storeId, period ?? 'current'] as const,
 };
 
 export interface POSDataContextValue {
