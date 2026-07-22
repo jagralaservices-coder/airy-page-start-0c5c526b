@@ -26,6 +26,11 @@ export type PosEventName =
   | 'pos:order-completed'
   | 'pos:order-cancelled'
   | 'pos:customer-updated'
+  | 'pos:customer-created'
+  | 'pos:customer-deleted'
+  | 'pos:credit-updated'
+  | 'pos:credit-payment-added'
+  | 'pos:credit-cleared'
   | 'pos:attendance-updated'
   | 'pos:subscription-updated'
   // Slice 5: Tables + KOT typed events.
