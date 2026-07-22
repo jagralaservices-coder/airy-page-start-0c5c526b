@@ -123,6 +123,30 @@ async function fetchCustomers(merchantId: string) {
   if (error) throw error;
   return data || [];
 }
+// Slice 7: Credit Ledger — store-scoped due sales with normalized columns.
+// Consumers should read via useCreditLedgerQuery so realtime + typed events
+// fan out from one cache. Writes still flow through POSContext credit
+// helpers / useSaveCloudDataMutation('credit_ledger'); this hook is strictly
+// the read + cache surface.
+async function fetchCreditLedger(storeId: string) {
+  const { data, error } = await supabase
+    .from('credit_ledger')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+// Slice 7: Credit Payments — store-scoped payments against ledger entries.
+async function fetchCreditPayments(storeId: string) {
+  const { data, error } = await supabase
+    .from('credit_payments')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
 async function fetchTables(storeId: string) {
   const { data, error } = await supabase
     .from('restaurant_tables').select('*').eq('store_id', storeId);
