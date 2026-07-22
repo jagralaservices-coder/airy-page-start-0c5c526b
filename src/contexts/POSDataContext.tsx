@@ -37,6 +37,9 @@ import { useMerchant } from '@/contexts/MerchantContext';
 import { useStore } from '@/contexts/StoreContext';
 import { useRealtime } from '@/contexts/RealtimeContext';
 import { onPosEvent } from '@/lib/posEvents';
+import { fetchCloudData, getCurrentStoreCode } from '@/hooks/useCloudData';
+import { dbToLocalMenuItem, dbToLocalCategory } from '@/lib/transformers';
+import type { MenuItem, Category } from '@/lib/store';
 
 // ---------------------------------------------------------------------------
 // Query-key namespace — the single vocabulary the app uses to identify data.
