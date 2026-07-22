@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getCreditPayments, getCreditLedger, safeMerge } from '@/lib/store';
 import { startOfDay, startOfWeek, startOfMonth, isAfter } from 'date-fns';
 import { useOwnerStore } from './useOwnerStore';
-import { useCloudData } from './useCloudData';
+import { useCreditLedgerQuery, useCreditPaymentsQuery } from '@/contexts/POSDataContext';
 import { dbToLocalCreditEntry, dbToLocalCreditPayment } from '@/lib/transformers';
 
 export type TimeRange = 'today' | 'week' | 'month' | 'all' | 'custom';
