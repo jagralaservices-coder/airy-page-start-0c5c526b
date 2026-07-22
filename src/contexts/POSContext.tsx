@@ -448,9 +448,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (ordersData) setOrdersState(ordersData as Order[]);
   }, [ordersData]);
 
-  const { data: heldBillsData } = useCloudData('held_bills', (data) => {
-    return (data?.items || []).map(dbToLocalHeldBill);
-  }, []);
+  // Slice 6 (Phase 2C): Held bills are now owned by POSDataContext.
+  // Mirror the shared React-Query cache into legacy `heldBills` state so
+  // every existing consumer of usePOSContext().heldBills keeps working
+  // unchanged. Writes below emit pos:heldbill-* events so this cache
+  // refreshes without a manual signal.
+  const { data: heldBillsData } = useHeldBillsQuery();
 
   useEffect(() => {
     if (heldBillsData) setHeldBillsState(heldBillsData);
