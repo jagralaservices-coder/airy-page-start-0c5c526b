@@ -795,31 +795,35 @@ const App = () => {
         <ThemeProvider>
           <LocaleProvider>
             <SupabaseAuthProvider>
-              <FeatureAccessProvider>
-                <ImpersonationProvider>
-                  <POSProvider>
-                    <TooltipProvider>
-                      <Toaster />
-                      <Sonner />
-                      <OfflineIndicator />
-                      <ImpersonationBanner />
-                      {window.isDesktopApp ? (
-                        <HashRouter>
-                          <BackgroundQROrderManager />
-                          <AppRoutes />
-                          <PWAInstallPrompt />
-                        </HashRouter>
-                      ) : (
-                        <BrowserRouter>
-                          <BackgroundQROrderManager />
-                          <AppRoutes />
-                          <PWAInstallPrompt />
-                        </BrowserRouter>
-                      )}
-                    </TooltipProvider>
-                  </POSProvider>
-                </ImpersonationProvider>
-              </FeatureAccessProvider>
+              <AuthProvider>
+                <MerchantProvider>
+                  <FeatureAccessProvider>
+                    <ImpersonationProvider>
+                      <POSProvider>
+                        <TooltipProvider>
+                          <Toaster />
+                          <Sonner />
+                          <OfflineIndicator />
+                          <ImpersonationBanner />
+                          {window.isDesktopApp ? (
+                            <HashRouter>
+                              <BackgroundQROrderManager />
+                              <AppRoutes />
+                              <PWAInstallPrompt />
+                            </HashRouter>
+                          ) : (
+                            <BrowserRouter>
+                              <BackgroundQROrderManager />
+                              <AppRoutes />
+                              <PWAInstallPrompt />
+                            </BrowserRouter>
+                          )}
+                        </TooltipProvider>
+                      </POSProvider>
+                    </ImpersonationProvider>
+                  </FeatureAccessProvider>
+                </MerchantProvider>
+              </AuthProvider>
             </SupabaseAuthProvider>
           </LocaleProvider>
         </ThemeProvider>
