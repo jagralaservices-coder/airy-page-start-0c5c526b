@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { LogoutConfirmDialog } from '@/components/pos/LogoutConfirmDialog';
 import { getCashierSession, CashierSession } from '@/lib/cashier';
 import { useUICustomization } from '@/hooks/useUICustomization';
+import { toast } from 'sonner';
 import { MaxoraLogo } from '@/components/ui/MaxoraLogo';
 import MAXORAIcon from '@/assets/maxora-icon.jpg';
 
