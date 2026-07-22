@@ -9,6 +9,8 @@ import { POSProvider, usePOSSafe } from "@/contexts/POSContext";
 import { SupabaseAuthProvider, useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { MerchantProvider } from "@/contexts/MerchantContext";
+import { StoreProvider } from "@/contexts/StoreContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { FeatureAccessProvider } from "@/contexts/FeatureAccessContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LocaleProvider } from "@/contexts/LocaleContext";
@@ -797,31 +799,35 @@ const App = () => {
             <SupabaseAuthProvider>
               <AuthProvider>
                 <MerchantProvider>
-                  <FeatureAccessProvider>
-                    <ImpersonationProvider>
-                      <POSProvider>
-                        <TooltipProvider>
-                          <Toaster />
-                          <Sonner />
-                          <OfflineIndicator />
-                          <ImpersonationBanner />
-                          {window.isDesktopApp ? (
-                            <HashRouter>
-                              <BackgroundQROrderManager />
-                              <AppRoutes />
-                              <PWAInstallPrompt />
-                            </HashRouter>
-                          ) : (
-                            <BrowserRouter>
-                              <BackgroundQROrderManager />
-                              <AppRoutes />
-                              <PWAInstallPrompt />
-                            </BrowserRouter>
-                          )}
-                        </TooltipProvider>
-                      </POSProvider>
-                    </ImpersonationProvider>
-                  </FeatureAccessProvider>
+                  <StoreProvider>
+                    <SubscriptionProvider>
+                      <FeatureAccessProvider>
+                        <ImpersonationProvider>
+                          <POSProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <OfflineIndicator />
+                              <ImpersonationBanner />
+                              {window.isDesktopApp ? (
+                                <HashRouter>
+                                  <BackgroundQROrderManager />
+                                  <AppRoutes />
+                                  <PWAInstallPrompt />
+                                </HashRouter>
+                              ) : (
+                                <BrowserRouter>
+                                  <BackgroundQROrderManager />
+                                  <AppRoutes />
+                                  <PWAInstallPrompt />
+                                </BrowserRouter>
+                              )}
+                            </TooltipProvider>
+                          </POSProvider>
+                        </ImpersonationProvider>
+                      </FeatureAccessProvider>
+                    </SubscriptionProvider>
+                  </StoreProvider>
                 </MerchantProvider>
               </AuthProvider>
             </SupabaseAuthProvider>
