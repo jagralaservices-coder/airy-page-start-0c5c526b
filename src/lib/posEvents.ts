@@ -34,7 +34,15 @@ export type PosEventName =
   | 'pos:kot-created'
   | 'pos:kot-updated'
   | 'pos:kot-completed'
-  | 'pos:kot-cancelled';
+  | 'pos:kot-cancelled'
+  // Slice 6: Held Bills + Offline Sync typed events.
+  | 'pos:heldbill-created'
+  | 'pos:heldbill-updated'
+  | 'pos:heldbill-deleted'
+  | 'pos:sync-started'
+  | 'pos:sync-completed'
+  | 'pos:sync-failed'
+  | 'pos:queue-updated';
 
 export interface PosEventPayloads {
   'pos:store-changed': { storeId: string | null } | void;
@@ -58,6 +66,14 @@ export interface PosEventPayloads {
   'pos:kot-updated': { kotId?: string; orderId?: string; storeId?: string | null } | void;
   'pos:kot-completed': { kotId?: string; orderId?: string; storeId?: string | null } | void;
   'pos:kot-cancelled': { kotId?: string; orderId?: string; storeId?: string | null } | void;
+  // Slice 6: Held Bills + Offline Sync payloads.
+  'pos:heldbill-created': { billId?: string; storeId?: string | null } | void;
+  'pos:heldbill-updated': { billId?: string; storeId?: string | null } | void;
+  'pos:heldbill-deleted': { billId?: string; storeId?: string | null } | void;
+  'pos:sync-started': { storeId?: string | null; reason?: string } | void;
+  'pos:sync-completed': { storeId?: string | null; drained?: number } | void;
+  'pos:sync-failed': { storeId?: string | null; error?: string } | void;
+  'pos:queue-updated': { pending?: number; poisoned?: number } | void;
 }
 
 

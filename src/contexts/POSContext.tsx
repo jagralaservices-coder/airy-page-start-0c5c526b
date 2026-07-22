@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { showLowStockAlert, showOutOfStockAlert } from '@/lib/notifications';
 import { formatQuantityDisplay, convertToBaseUnit } from '@/lib/inventoryUtils';
 import { useCloudData } from '@/hooks/useCloudData';
-import { useMenuItemsQuery, useCategoriesQuery, useOrdersQuery, useTablesQuery } from '@/contexts/POSDataContext';
+import { useMenuItemsQuery, useCategoriesQuery, useOrdersQuery, useTablesQuery, useHeldBillsQuery } from '@/contexts/POSDataContext';
 import { emitPosEvent } from '@/lib/posEvents';
 import { 
   useSaveOrderMutation, 
@@ -448,9 +448,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (ordersData) setOrdersState(ordersData as Order[]);
   }, [ordersData]);
 
-  const { data: heldBillsData } = useCloudData('held_bills', (data) => {
-    return (data?.items || []).map(dbToLocalHeldBill);
-  }, []);
+  // Slice 6 (Phase 2C): Held bills are now owned by POSDataContext.
+  // Mirror the shared React-Query cache into legacy `heldBills` state so
+  // every existing consumer of usePOSContext().heldBills keeps working
+  // unchanged. Writes below emit pos:heldbill-* events so this cache
+  // refreshes without a manual signal.
+  const { data: heldBillsData } = useHeldBillsQuery();
 
   useEffect(() => {
     if (heldBillsData) setHeldBillsState(heldBillsData);
@@ -2353,6 +2356,9 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setHeldBillsState(newHeldBills);
     setHeldBills(newHeldBills);
+    emitPosEvent(existingIdx >= 0 ? 'pos:heldbill-updated' : 'pos:heldbill-created', {
+      storeId: activeStore?.id ?? null,
+    });
     clearCart();
   };
 
@@ -2373,6 +2379,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newHeldBills = heldBills.filter((b) => b.id !== billId);
     setHeldBillsState(newHeldBills);
     setHeldBills(newHeldBills);
+    emitPosEvent('pos:heldbill-deleted', { billId, storeId: activeStore?.id ?? null });
   };
 
   const mergeBills = (billIds: string[]) => {
@@ -2404,6 +2411,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newHeldBills = heldBills.filter((b) => !billIds.includes(b.id));
     setHeldBillsState(newHeldBills);
     setHeldBills(newHeldBills);
+    emitPosEvent('pos:heldbill-updated', { storeId: activeStore?.id ?? null });
 
     toast.success(`Merged ${billsToMerge.length} bills into current order`);
   };

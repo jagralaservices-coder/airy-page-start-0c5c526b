@@ -135,6 +135,14 @@ const crossInvalidateSlice1 = (
     // Slice 5: KOT cache. KOT generation still lives in POSContext, so this
     // path exists for future kitchen mutation sites without changing them.
     queryClient.invalidateQueries({ queryKey: ['pos', 'kot', storeId] });
+  } else if (dataType === 'held_bills') {
+    // Slice 6: Held bills share a single POSDataContext cache.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'held-bills', storeId] });
+  }
+  if (dataType === 'held_bills') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:heldbill-updated', { detail: { storeId } }));
+    } catch {}
   }
   if (dataType === 'menu_items' || dataType === 'categories') {
     try {
