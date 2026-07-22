@@ -5,7 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { showLowStockAlert, showOutOfStockAlert } from '@/lib/notifications';
 import { formatQuantityDisplay, convertToBaseUnit } from '@/lib/inventoryUtils';
 import { useCloudData } from '@/hooks/useCloudData';
-import { useMenuItemsQuery, useCategoriesQuery, useOrdersQuery } from '@/contexts/POSDataContext';
+import { useMenuItemsQuery, useCategoriesQuery, useOrdersQuery, useTablesQuery } from '@/contexts/POSDataContext';
+import { emitPosEvent } from '@/lib/posEvents';
 import { 
   useSaveOrderMutation, 
   useSaveCloudDataMutation, 
@@ -455,12 +456,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (heldBillsData) setHeldBillsState(heldBillsData);
   }, [heldBillsData]);
 
-  const { data: tablesData } = useCloudData('tables', (data) => {
-    return (data?.items || []) as Table[];
-  }, []);
-
+  // Slice 5 (Phase 2C): Tables are now owned by POSDataContext.
+  // Mirror the shared React-Query cache into legacy `tables` state so every
+  // existing consumer of usePOSContext().tables keeps working unchanged.
+  const { data: tablesData } = useTablesQuery();
   useEffect(() => {
-    if (tablesData) setTablesState(tablesData);
+    if (tablesData) setTablesState(tablesData as Table[]);
   }, [tablesData]);
 
   // Mutations
@@ -2426,6 +2427,8 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     setTablesState(newTables);
     setTables(newTables);
+    // Slice 5: notify POSDataContext + peers via typed event bus.
+    try { emitPosEvent('pos:table-status-changed', { tableId, status, storeId: activeStoreId ?? null }); } catch {}
   };
 
 

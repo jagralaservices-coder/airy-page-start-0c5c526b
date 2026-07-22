@@ -128,6 +128,13 @@ const crossInvalidateSlice1 = (
   } else if (dataType === 'inventory_components' || dataType === 'recipes') {
     queryClient.invalidateQueries({ queryKey: ['pos', 'recipes', storeId] });
     queryClient.invalidateQueries({ queryKey: ['pos', 'inventory', storeId] });
+  } else if (dataType === 'tables' || dataType === 'restaurant_tables') {
+    // Slice 5: tables share a single POSDataContext cache.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'tables', storeId] });
+  } else if (dataType === 'kot' || dataType === 'kot_tickets' || dataType === 'kot_items') {
+    // Slice 5: KOT cache. KOT generation still lives in POSContext, so this
+    // path exists for future kitchen mutation sites without changing them.
+    queryClient.invalidateQueries({ queryKey: ['pos', 'kot', storeId] });
   }
   if (dataType === 'menu_items' || dataType === 'categories') {
     try {
@@ -147,6 +154,16 @@ const crossInvalidateSlice1 = (
   if (dataType === 'inventory_components' || dataType === 'recipes') {
     try {
       window.dispatchEvent(new CustomEvent('pos:recipe-updated', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'tables' || dataType === 'restaurant_tables') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:table-updated', { detail: { storeId } }));
+    } catch {}
+  }
+  if (dataType === 'kot' || dataType === 'kot_tickets' || dataType === 'kot_items') {
+    try {
+      window.dispatchEvent(new CustomEvent('pos:kot-updated', { detail: { storeId } }));
     } catch {}
   }
 };

@@ -113,6 +113,30 @@ async function fetchTables(storeId: string) {
   if (error) throw error;
   return data || [];
 }
+// Slice 5: KOT tickets + items scoped to the active store. Kitchen-facing
+// consumers should read via useKOTQuery instead of touching supabase directly
+// so realtime invalidations fan out to every screen from one cache.
+export interface KOTTicket {
+  id: string;
+  order_id: string | null;
+  table_id: string | null;
+  store_id: string;
+  status: string;
+  kot_number: number | null;
+  created_at: string;
+  updated_at: string | null;
+  items?: any[];
+}
+async function fetchKOT(storeId: string): Promise<KOTTicket[]> {
+  const { data, error } = await supabase
+    .from('kot_tickets')
+    .select('*, items:kot_items(*)')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return (data || []) as any as KOTTicket[];
+}
 async function fetchInventory(storeId: string) {
   const { data, error } = await supabase
     .from('inventory_items').select('*').eq('store_id', storeId);
@@ -187,9 +211,19 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       realtime.subscribe({ table: 'inventory_transactions', filter }, () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
       }),
+      // Slice 5: KOT tickets/items. Tickets are store-scoped; items ride on
+      // parent ticket ids so we subscribe without a filter and rely on the
+      // shared kot cache invalidation. RealtimeContext dedupes channels.
+      realtime.subscribe({ table: 'kot_tickets', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      realtime.subscribe({ table: 'kot_items' }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
+
+
+
 
 
   // Cross-hook event bus → cache invalidation.
@@ -224,7 +258,20 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
       onPosEvent('pos:products-updated', () =>
         queryClient.invalidateQueries({ queryKey: ['pos', 'products'] })),
-
+      // Slice 5: Tables + KOT typed events → cache invalidation only. No
+      // global refresh; each event narrows to its own store-scoped key.
+      onPosEvent('pos:table-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.tables(activeStoreId) })),
+      onPosEvent('pos:table-status-changed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.tables(activeStoreId) })),
+      onPosEvent('pos:kot-created', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      onPosEvent('pos:kot-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      onPosEvent('pos:kot-completed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      onPosEvent('pos:kot-cancelled', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
@@ -346,13 +393,40 @@ export function useCustomersQuery(opts?: QOpts<any[]>) {
     ...opts,
   });
 }
+// Slice 5: Tables — single owner for the restaurant tables read path.
+// Consumers (POSContext mirror, TablesView, KOT panel, transfer dialog)
+// should prefer this hook so every mount hits the same cache and every
+// realtime/event invalidation reaches every screen at once. Writes still
+// flow through useSaveCloudDataMutation('tables') / POSContext table ops.
 export function useTablesQuery(opts?: QOpts<any[]>) {
   const { activeStoreId } = useStore();
   return useQuery({
     queryKey: posQueryKeys.tables(activeStoreId),
     queryFn: () => fetchTables(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+// Slice 5: KOT — single owner for the kitchen order ticket read path.
+// KOT generation logic (kot numbering, printing) is untouched and still
+// lives in POSContext; this hook is strictly the read + cache surface for
+// kitchen-facing consumers. Empty until a KOT surface subscribes.
+export function useKOTQuery(opts?: QOpts<KOTTicket[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery<KOTTicket[]>({
+    queryKey: posQueryKeys.kot(activeStoreId),
+    queryFn: () => fetchKOT(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as KOTTicket[],
     ...opts,
   });
 }
