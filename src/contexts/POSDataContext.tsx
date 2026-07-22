@@ -57,6 +57,7 @@ export const posQueryKeys = {
   tables: (storeId: string | null) => ['pos', 'tables', storeId] as const,
   kot: (storeId: string | null) => ['pos', 'kot', storeId] as const,
   inventory: (storeId: string | null) => ['pos', 'inventory', storeId] as const,
+  inventoryTransactions: (storeId: string | null) => ['pos', 'inventory-transactions', storeId] as const,
   recipes: (storeId: string | null) => ['pos', 'recipes', storeId] as const,
   heldBills: (storeId: string | null) => ['pos', 'held-bills', storeId] as const,
   offlineQueue: () => ['pos', 'offline-queue'] as const,
@@ -198,6 +199,17 @@ async function fetchKOT(storeId: string): Promise<KOTTicket[]> {
 async function fetchInventory(storeId: string) {
   const { data, error } = await supabase
     .from('inventory_items').select('*').eq('store_id', storeId);
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchInventoryTransactions(storeId: string) {
+  const { data, error } = await supabase
+    .from('inventory_transactions' as any)
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .limit(500);
   if (error) throw error;
   return data || [];
 }
@@ -349,6 +361,7 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       // inventory_transactions logs (audit) also implies stock changed.
       realtime.subscribe({ table: 'inventory_transactions', filter }, () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventoryTransactions(activeStoreId) });
       }),
       // Slice 5: KOT tickets/items. Tickets are store-scoped; items ride on
       // parent ticket ids so we subscribe without a filter and rely on the
@@ -420,8 +433,11 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
       onPosEvent('pos:inventory-adjusted', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
-      onPosEvent('pos:stock-deducted', () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:stock-deducted', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.menuItems(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventoryTransactions(activeStoreId) });
+      }),
       onPosEvent('pos:recipe-updated', () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
@@ -761,6 +777,20 @@ export function useInventoryQuery(opts?: QOpts<any[]>) {
     enabled: !!activeStoreId,
     staleTime: 10_000,
     refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+export function useInventoryTransactionsQuery(opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.inventoryTransactions(activeStoreId),
+    queryFn: () => fetchInventoryTransactions(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     initialData: [] as any[],
