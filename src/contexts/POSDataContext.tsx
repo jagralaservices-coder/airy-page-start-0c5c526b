@@ -212,23 +212,31 @@ export function usePOSDataSafe(): POSDataContextValue | null {
 // ---------------------------------------------------------------------------
 type QOpts<T> = Omit<UseQueryOptions<T, Error, T, any>, 'queryKey' | 'queryFn'>;
 
-export function useCategoriesQuery(opts?: QOpts<any[]>) {
+export function useCategoriesQuery(opts?: QOpts<Category[]>) {
   const { activeStoreId } = useStore();
-  return useQuery({
+  return useQuery<Category[]>({
     queryKey: posQueryKeys.categories(activeStoreId),
     queryFn: () => fetchCategories(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as Category[],
     ...opts,
   });
 }
-export function useMenuItemsQuery(opts?: QOpts<any[]>) {
+export function useMenuItemsQuery(opts?: QOpts<MenuItem[]>) {
   const { activeStoreId } = useStore();
-  return useQuery({
+  return useQuery<MenuItem[]>({
     queryKey: posQueryKeys.menuItems(activeStoreId),
     queryFn: () => fetchMenuItems(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as MenuItem[],
     ...opts,
   });
 }
