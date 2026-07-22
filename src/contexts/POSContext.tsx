@@ -1350,11 +1350,31 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Helper function to reduce stock and inventory (supports recipe-based deduction with auto-production)
-  const reduceStock = async (cartItems: CartItem[]) => {
+  const reduceStock = async (cartItems: CartItem[], sourceOrder?: Pick<Order, 'id' | 'billNumber' | 'storeId'>) => {
     console.log('[reduceStock] Starting stock reduction for', cartItems.length, 'items');
     const stockChanges: string[] = [];
     const inventoryChanges: string[] = [];
     const autoProductionLog: string[] = [];
+    const activeReductionStoreId = sourceOrder?.storeId || activeStoreId || localStorage.getItem('pos_active_store') || JSON.parse(localStorage.getItem('pos_active_store_data') || '{}')?.id || null;
+    const isUuid = (value?: string | null) => !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+    const insertInventoryTransaction = async (row: {
+      inventory_item_id: string;
+      store_id: string | null;
+      source: string;
+      qty_delta: number;
+      qty_before: number;
+      qty_after: number;
+      unit: string;
+      reference?: string | null;
+      notes?: string | null;
+    }) => {
+      if (!row.store_id || !isUuid(row.inventory_item_id)) return;
+      const { error } = await supabase.from('inventory_transactions' as any).insert({
+        ...row,
+        order_id: isUuid(sourceOrder?.id) ? sourceOrder?.id : null,
+      });
+      if (error) console.warn('[reduceStock] inventory transaction log failed:', error);
+    };
     
     // Get current inventory from localStorage - create a deep copy
     let currentInventory = JSON.parse(JSON.stringify(getInventory())) as typeof getInventory extends () => infer T ? T : never;
@@ -1599,6 +1619,18 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (error) console.error('[reduceStock] Cloud update failed for inventory item:', updatedInvItem.name, error);
         });
 
+      insertInventoryTransaction({
+        inventory_item_id: updatedInvItem.id,
+        store_id: activeReductionStoreId,
+        source: 'recipe_usage',
+        qty_delta: -Math.abs(quantityToDeduct),
+        qty_before: oldQuantity,
+        qty_after: newQuantity,
+        unit: updatedInvItem.unit,
+        reference: sourceOrder?.billNumber || null,
+        notes: `Used by completed bill${sourceOrder?.billNumber ? ` ${sourceOrder.billNumber}` : ''}`,
+      });
+
       inventoryUpdated = true;
       
       inventoryChanges.push(`${updatedInvItem.name}: ${formatQuantityDisplay(oldQuantity, updatedInvItem.unit)} → ${formatQuantityDisplay(newQuantity, updatedInvItem.unit)}`);
@@ -1633,10 +1665,38 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const newStock = Math.max(0, menuItem.stock - cartItem.quantity);
         
         // Update in database
-        await supabase
+        const { error: stockError } = await supabase
           .from('menu_items')
           .update({ stock: newStock })
           .eq('id', cartItem.id);
+        if (stockError) console.error('[reduceStock] Menu item stock update failed:', menuItem.name, stockError);
+        await insertInventoryTransaction({
+          inventory_item_id: menuItem.id,
+          store_id: activeReductionStoreId,
+          source: 'product_stock_sale',
+          qty_delta: -Math.abs(cartItem.quantity),
+          qty_before: oldStock,
+          qty_after: newStock,
+          unit: 'pcs',
+          reference: sourceOrder?.billNumber || null,
+          notes: `${menuItem.name} sold${sourceOrder?.billNumber ? ` in bill ${sourceOrder.billNumber}` : ''}`,
+        });
+
+        try {
+          logInventoryHistory({
+            type: 'usage',
+            storeId: activeReductionStoreId || undefined,
+            inventoryId: menuItem.id,
+            inventoryName: menuItem.name,
+            quantity: cartItem.quantity,
+            unit: 'pcs',
+            menuItemId: menuItem.id,
+            menuItemName: menuItem.name,
+            menuItemQuantity: cartItem.quantity,
+            orderId: sourceOrder?.id,
+            billNumber: sourceOrder?.billNumber,
+          });
+        } catch (err) { console.warn('[reduceStock] product stock history log failed', err); }
         
         stockChanges.push(`${menuItem.name}: ${oldStock} → ${newStock}`);
         
@@ -1674,6 +1734,8 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 menuItemId: menuItem.id,
                 menuItemName: menuItem.name,
                 menuItemQuantity: cartItem.quantity,
+                orderId: sourceOrder?.id,
+                billNumber: sourceOrder?.billNumber,
               });
             } catch (err) { console.warn('[reduceStock] history log failed', err); }
           }
@@ -1696,6 +1758,8 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               menuItemId: menuItem.id,
               menuItemName: menuItem.name,
               menuItemQuantity: cartItem.quantity,
+              orderId: sourceOrder?.id,
+              billNumber: sourceOrder?.billNumber,
             });
           } catch (err) { console.warn('[reduceStock] history log failed', err); }
         }
@@ -1724,6 +1788,9 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         description: stockChanges.slice(0, 3).join(', ') + (stockChanges.length > 3 ? ` +${stockChanges.length - 3} more` : ''),
         duration: 3000,
       });
+      try {
+        emitPosEvent('pos:stock-deducted', { orderId: sourceOrder?.id, storeId: activeReductionStoreId });
+      } catch {}
     }
     
     // Show inventory update notification
@@ -2029,7 +2096,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setOrdersState(updatedOrders);
     setOrders(updatedOrders);
 
-    reduceStock(order.items);
+    reduceStock(order.items, updatedOrder);
 
     if (order.orderType === 'dine-in' && order.tableNumber) {
       const table = tables.find(t => t.number === order.tableNumber);
@@ -2189,7 +2256,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setOrdersState(getOrders());
 
-    reduceStock(cart);
+    reduceStock(cart, order);
 
     const finalCustomerName = (customerInfo?.name || 'Walk-in Customer').trim();
     const finalCustomerPhone = (customerInfo?.phone || '').trim() || null;
