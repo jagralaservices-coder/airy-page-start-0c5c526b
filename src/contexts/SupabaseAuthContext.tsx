@@ -318,10 +318,11 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
             };
             setStore(normalizedStore as unknown as StoreData);
             localStorage.setItem('pos_store_backup', JSON.stringify(normalizedStore));
-            if (roleRecord.role === 'store_manager' || roleRecord.role === 'staff') {
+            if (roleRecord.role === 'store_manager' || roleRecord.role === 'staff' || roleRecord.role === 'cashier') {
               const generatedStoreCode = (storeData as any).id?.slice(0, 8).toUpperCase();
               localStorage.setItem('pos_active_store', storeData.id);
               localStorage.setItem('pos_store_code', generatedStoreCode);
+              localStorage.setItem('owner_selected_store_id', storeData.id);
               localStorage.setItem('pos_active_store_data', JSON.stringify({
                 id: storeData.id,
                 storeId: storeData.id,
@@ -335,6 +336,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
                 subscription_tier: customerTier,
                 business_type: (storeData as any).business_type || 'restaurant',
               }));
+              try { window.dispatchEvent(new CustomEvent('pos:store-changed', { detail: { storeId: storeData.id } })); } catch {}
             }
 
             if (roleRecord.role === 'staff') {
