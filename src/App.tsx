@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { POSProvider, usePOSSafe } from "@/contexts/POSContext";
 import { SupabaseAuthProvider, useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { MerchantProvider } from "@/contexts/MerchantContext";
 import { FeatureAccessProvider } from "@/contexts/FeatureAccessContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LocaleProvider } from "@/contexts/LocaleContext";
@@ -793,31 +795,35 @@ const App = () => {
         <ThemeProvider>
           <LocaleProvider>
             <SupabaseAuthProvider>
-              <FeatureAccessProvider>
-                <ImpersonationProvider>
-                  <POSProvider>
-                    <TooltipProvider>
-                      <Toaster />
-                      <Sonner />
-                      <OfflineIndicator />
-                      <ImpersonationBanner />
-                      {window.isDesktopApp ? (
-                        <HashRouter>
-                          <BackgroundQROrderManager />
-                          <AppRoutes />
-                          <PWAInstallPrompt />
-                        </HashRouter>
-                      ) : (
-                        <BrowserRouter>
-                          <BackgroundQROrderManager />
-                          <AppRoutes />
-                          <PWAInstallPrompt />
-                        </BrowserRouter>
-                      )}
-                    </TooltipProvider>
-                  </POSProvider>
-                </ImpersonationProvider>
-              </FeatureAccessProvider>
+              <AuthProvider>
+                <MerchantProvider>
+                  <FeatureAccessProvider>
+                    <ImpersonationProvider>
+                      <POSProvider>
+                        <TooltipProvider>
+                          <Toaster />
+                          <Sonner />
+                          <OfflineIndicator />
+                          <ImpersonationBanner />
+                          {window.isDesktopApp ? (
+                            <HashRouter>
+                              <BackgroundQROrderManager />
+                              <AppRoutes />
+                              <PWAInstallPrompt />
+                            </HashRouter>
+                          ) : (
+                            <BrowserRouter>
+                              <BackgroundQROrderManager />
+                              <AppRoutes />
+                              <PWAInstallPrompt />
+                            </BrowserRouter>
+                          )}
+                        </TooltipProvider>
+                      </POSProvider>
+                    </ImpersonationProvider>
+                  </FeatureAccessProvider>
+                </MerchantProvider>
+              </AuthProvider>
             </SupabaseAuthProvider>
           </LocaleProvider>
         </ThemeProvider>
