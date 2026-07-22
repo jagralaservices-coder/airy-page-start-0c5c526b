@@ -55,6 +55,7 @@ import { BulkInventoryUpload } from './BulkInventoryUpload';
 import { useSubscription } from '@/hooks/useSubscription';
 
 import { useSaveCloudDataMutation, useDeleteCloudDataMutation } from '@/hooks/useCloudMutations';
+import { useMenuItemsQuery } from '@/contexts/POSDataContext';
 
 type ViewType = 'main' | 'purchaseManagement' | 'requestForPurchase' | 'wastage' | 'addWastage' | 'convertRawMaterial' | 'currentStock' | 'openingClosing' | 'indentManagement' | 'productionExecution' | 'bulkUpload' | 'smartInventory' | 'inventoryHistory' | 'menuRecipes';
 
@@ -1656,7 +1657,11 @@ const InventoryHistoryView: React.FC<{ onBack: () => void; inventory: InventoryI
 
 // Menu Recipes - link inventory ingredients to menu items
 const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { data: cloudMenuItems } = useMenuItemsQuery();
   const [items, setItems] = useState<MenuItem[]>(getMenuItems());
+  React.useEffect(() => {
+    if (cloudMenuItems) setItems(cloudMenuItems as MenuItem[]);
+  }, [cloudMenuItems]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [selected, setSelected] = useState<MenuItem | null>(null);
@@ -1768,6 +1773,7 @@ const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <div className="flex items-center gap-2 bg-secondary/30 p-1.5 rounded-xl border border-border/50" onClick={e => e.stopPropagation()}>
                     <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap pl-1">Product Stock:</span>
                     <Input
+                      key={`stock-${item.id}-${item.stock ?? 'none'}`}
                       type="number"
                       placeholder="∞"
                       defaultValue={item.stock !== undefined ? item.stock : ''}
