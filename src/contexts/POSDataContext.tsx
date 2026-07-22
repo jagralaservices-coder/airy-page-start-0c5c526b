@@ -119,6 +119,32 @@ async function fetchInventory(storeId: string) {
   if (error) throw error;
   return data || [];
 }
+// Slice 4: Recipes — inventory_components rows scoped to the parent items in
+// the active store. Filtered client-side on parent store because
+// inventory_components has no store_id column of its own; we fetch parent
+// inventory ids first, then components. Consumers should read via
+// useRecipesQuery instead of touching supabase directly.
+export interface RecipeComponent {
+  id: string;
+  parent_inventory_id: string;
+  child_inventory_id: string;
+  quantity_required: number;
+  unit: string;
+}
+async function fetchRecipes(storeId: string): Promise<RecipeComponent[]> {
+  const { data: parents, error: pErr } = await supabase
+    .from('inventory_items').select('id').eq('store_id', storeId);
+  if (pErr) throw pErr;
+  const parentIds = (parents || []).map((r: any) => r.id);
+  if (parentIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('inventory_components')
+    .select('id, parent_inventory_id, child_inventory_id, quantity_required, unit')
+    .in('parent_inventory_id', parentIds);
+  if (error) throw error;
+  return (data || []) as RecipeComponent[];
+}
+
 
 // ---------------------------------------------------------------------------
 // Provider
