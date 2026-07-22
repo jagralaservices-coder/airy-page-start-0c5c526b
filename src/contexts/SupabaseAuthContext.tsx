@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { logSecurityAction } from '@/lib/auditLogger';
 
-export type UserRole = 'super_admin' | 'admin' | 'owner' | 'store_manager' | 'staff';
+export type UserRole = 'super_admin' | 'admin' | 'owner' | 'store_manager' | 'staff' | 'cashier';
 
 export interface UserRoleData {
   id: string;
