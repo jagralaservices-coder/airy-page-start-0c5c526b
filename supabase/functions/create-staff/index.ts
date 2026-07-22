@@ -93,7 +93,7 @@ serve(async (req) => {
       .from('user_roles')
       .select('role, customer_id')
       .eq('user_id', user.id)
-      .in('role', ['admin', 'owner'])
+      .in('role', ['admin', 'owner', 'super_admin'])
       .eq('is_active', true)
       .maybeSingle()
 
