@@ -1,14 +1,13 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getCurrentStoreId, getCurrentStoreCode } from '@/lib/storeIdentity';
 
-// Re-export identity helpers for backward compatibility with any lingering
-// imports. New consumers should import from '@/lib/storeIdentity'.
-export { getCurrentStoreId, getCurrentStoreCode };
-
-// Shared edge-function wrapper used by POSDataContext to read cloud data
-// through the sync-store-data / sync-orders edge functions. The legacy
-// `useCloudData` React hook has been retired — POSDataContext is now the
-// single React Query owner. This helper remains as the low-level fetcher.
+/**
+ * Shared edge-function wrapper used by POSDataContext to read cloud data
+ * through the sync-store-data / sync-orders edge functions.
+ *
+ * POSDataContext is the single React Query owner for this data — new
+ * consumers should read via POSDataContext hooks (e.g. useOrdersQuery),
+ * not by calling fetchCloudData directly.
+ */
 export const fetchCloudData = async (
   dataType: string,
   storeId: string,
@@ -25,7 +24,11 @@ export const fetchCloudData = async (
     return data;
   }
 
-  const body: any = { action: 'fetch', store_id: storeId, data_type: dataType };
+  const body: Record<string, unknown> = {
+    action: 'fetch',
+    store_id: storeId,
+    data_type: dataType,
+  };
   if (storeCode) body.store_code = storeCode;
 
   const { data, error } = await supabase.functions.invoke('sync-store-data', { body });

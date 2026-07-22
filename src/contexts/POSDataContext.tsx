@@ -37,7 +37,7 @@ import { useMerchant } from '@/contexts/MerchantContext';
 import { useStore } from '@/contexts/StoreContext';
 import { useRealtime } from '@/contexts/RealtimeContext';
 import { onPosEvent } from '@/lib/posEvents';
-import { fetchCloudData } from '@/hooks/useCloudData';
+import { fetchCloudData } from '@/lib/cloudDataFetcher';
 import { getCurrentStoreCode } from '@/lib/storeIdentity';
 import { dbToLocalMenuItem, dbToLocalCategory, dbToLocalOrder, dbToLocalHeldBill } from '@/lib/transformers';
 import type { MenuItem, Category, Order, HeldBill } from '@/lib/store';
@@ -99,8 +99,8 @@ const POSDataContext = createContext<POSDataContextValue | undefined>(undefined)
 // dedup + realtime invalidation.
 // ---------------------------------------------------------------------------
 async function fetchCategories(storeId: string): Promise<Category[]> {
-  // Route through the same edge function POSContext previously used via
-  // useCloudData so payload shape / RLS behaviour is identical.
+  // Route through the sync-store-data edge function so payload shape and
+  // RLS behaviour match every other POSDataContext read path.
   const storeCode = getCurrentStoreCode();
   const data = await fetchCloudData('categories', storeId, storeCode);
   return ((data?.items || []) as any[]).map(dbToLocalCategory);
@@ -227,7 +227,7 @@ async function fetchRecipes(storeId: string): Promise<RecipeComponent[]> {
   return (data || []) as RecipeComponent[];
 }
 // Slice 8: Expenses — store-scoped rows via sync-store-data edge function
-// so payload shape / RLS behaviour is identical to legacy useCloudData path.
+// so payload shape / RLS behaviour matches every other read path.
 async function fetchExpenses(storeId: string): Promise<any[]> {
   const storeCode = getCurrentStoreCode();
   const data = await fetchCloudData('expenses', storeId, storeCode);
@@ -634,7 +634,7 @@ export function useProductsQuery(opts?: QOpts<any[]>) {
 }
 
 // Slice 3: Orders — single owner for the orders read path. Consumers should
-// prefer this hook over ad-hoc `useCloudData('orders', ...)` calls so every
+// prefer this hook over ad-hoc fetchCloudData('orders', ...) calls so every
 // mount hits the same cache and every realtime/event invalidation reaches
 // every screen at once. Writes still flow through useSaveOrderMutation /
 // useOrderSync; this hook is strictly the read + cache surface.
@@ -783,7 +783,7 @@ export function useRecipesQuery(opts?: QOpts<RecipeComponent[]>) {
 }
 
 // Slice 6: Held Bills — single owner for the held-bills read path. Consumers
-// should prefer this hook over ad-hoc useCloudData('held_bills', ...) calls
+// should prefer this hook over ad-hoc fetchCloudData('held_bills', ...) calls
 // so every mount hits the same cache and every realtime/event invalidation
 // reaches every screen at once. Writes still flow through POSContext
 // (holdBill / mergeBills / deleteHeldBill) which emits pos:heldbill-* events.
@@ -865,7 +865,7 @@ export function useOfflineQueue(opts?: QOpts<OfflineQueueSnapshot>) {
 // ---------------------------------------------------------------------------
 
 // Expenses — single owner for the expenses read path. Consumers should prefer
-// this hook over ad-hoc useCloudData('expenses', ...) calls so every mount
+// this hook over ad-hoc fetchCloudData('expenses', ...) calls so every mount
 // hits the same cache and every realtime/event invalidation reaches every
 // screen at once. Writes still flow through useSaveCloudDataMutation('expenses')
 // / POSContext expense helpers; this hook is strictly the read + cache surface.
