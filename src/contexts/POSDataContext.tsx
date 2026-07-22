@@ -38,8 +38,9 @@ import { useStore } from '@/contexts/StoreContext';
 import { useRealtime } from '@/contexts/RealtimeContext';
 import { onPosEvent } from '@/lib/posEvents';
 import { fetchCloudData, getCurrentStoreCode } from '@/hooks/useCloudData';
-import { dbToLocalMenuItem, dbToLocalCategory, dbToLocalOrder } from '@/lib/transformers';
-import type { MenuItem, Category, Order } from '@/lib/store';
+import { dbToLocalMenuItem, dbToLocalCategory, dbToLocalOrder, dbToLocalHeldBill } from '@/lib/transformers';
+import type { MenuItem, Category, Order, HeldBill } from '@/lib/store';
+import { queueStats, listPoisoned, retryPoisoned, discardPoisoned } from '@/lib/syncQueue';
 
 // ---------------------------------------------------------------------------
 // Query-key namespace — the single vocabulary the app uses to identify data.
@@ -56,6 +57,8 @@ export const posQueryKeys = {
   kot: (storeId: string | null) => ['pos', 'kot', storeId] as const,
   inventory: (storeId: string | null) => ['pos', 'inventory', storeId] as const,
   recipes: (storeId: string | null) => ['pos', 'recipes', storeId] as const,
+  heldBills: (storeId: string | null) => ['pos', 'held-bills', storeId] as const,
+  offlineQueue: () => ['pos', 'offline-queue'] as const,
 };
 
 export interface POSDataContextValue {
