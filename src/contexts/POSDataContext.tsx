@@ -356,13 +356,39 @@ export function useTablesQuery(opts?: QOpts<any[]>) {
     ...opts,
   });
 }
+// Slice 4: Inventory + Recipes — single owner for the inventory read path.
+// Consumers should prefer these hooks over ad-hoc supabase queries so every
+// mount hits the same cache and every realtime/event invalidation reaches
+// every screen at once. Writes (adjustments, deductions, recipe edits) still
+// flow through existing mutation code paths (useInventoryDeduction,
+// useStoreDataSync, POSContext.reduceStock); these hooks are strictly the
+// read + cache surface.
 export function useInventoryQuery(opts?: QOpts<any[]>) {
   const { activeStoreId } = useStore();
   return useQuery({
     queryKey: posQueryKeys.inventory(activeStoreId),
     queryFn: () => fetchInventory(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
     ...opts,
   });
 }
+export function useRecipesQuery(opts?: QOpts<RecipeComponent[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery<RecipeComponent[]>({
+    queryKey: posQueryKeys.recipes(activeStoreId),
+    queryFn: () => fetchRecipes(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as RecipeComponent[],
+    ...opts,
+  });
+}
+
