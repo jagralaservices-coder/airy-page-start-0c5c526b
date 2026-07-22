@@ -211,6 +211,33 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       realtime.subscribe({ table: 'inventory_transactions', filter }, () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
       }),
+      // Slice 5: KOT tickets/items. Tickets are store-scoped; items ride on
+      // parent ticket ids so we subscribe without a filter and rely on the
+      // shared kot cache invalidation. RealtimeContext dedupes channels.
+      realtime.subscribe({ table: 'kot_tickets', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      realtime.subscribe({ table: 'kot_items' }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+    ];
+    return () => subs.forEach((u) => u());
+  }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
+
+
+  // Cross-hook event bus → cache invalidation.
+  React.useEffect(() => {
+    const offs = [
+      onPosEvent('pos:store-changed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.all })),
+      onPosEvent('pos:inventory-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:inventory-adjusted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:stock-deducted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:recipe-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
