@@ -2379,6 +2379,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newHeldBills = heldBills.filter((b) => b.id !== billId);
     setHeldBillsState(newHeldBills);
     setHeldBills(newHeldBills);
+    emitPosEvent('pos:heldbill-deleted', { billId, storeId: activeStore?.id ?? null });
   };
 
   const mergeBills = (billIds: string[]) => {
