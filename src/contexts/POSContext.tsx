@@ -7,7 +7,6 @@ import { formatQuantityDisplay, convertToBaseUnit } from '@/lib/inventoryUtils';
 import { useCloudData } from '@/hooks/useCloudData';
 import { useMenuItemsQuery, useCategoriesQuery, useOrdersQuery, useTablesQuery, useHeldBillsQuery } from '@/contexts/POSDataContext';
 import { emitPosEvent } from '@/lib/posEvents';
-import { emitPosEvent } from '@/lib/posEvents';
 import { 
   useSaveOrderMutation, 
   useSaveCloudDataMutation, 
