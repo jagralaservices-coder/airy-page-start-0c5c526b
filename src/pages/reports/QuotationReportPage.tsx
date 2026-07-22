@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useOwnerStore } from '@/hooks/useOwnerStore';
-import { getCurrentStoreId } from '@/hooks/useCloudData';
+import { getCurrentStoreId } from '@/lib/storeIdentity';
 import { listQuotations, Quotation, STATUS_COLORS, expireOldQuotations } from '@/lib/quotations';
 import { exportCSV, exportExcel, exportPDF, printReport } from '@/lib/reports/exporters';
 import { toast } from '@/hooks/use-toast';

@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { useOwnerStore } from '@/hooks/useOwnerStore';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
-import { getCurrentStoreId } from '@/hooks/useCloudData';
+import { getCurrentStoreId } from '@/lib/storeIdentity';
 import {
   Quotation, QuotationItem, QuotationStatus, STATUS_COLORS,
   listQuotations, saveQuotation, deleteQuotation, setQuotationStatus,

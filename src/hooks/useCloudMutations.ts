@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { getCurrentStoreId, getCurrentStoreCode } from './useCloudData';
+import { getCurrentStoreId, getCurrentStoreCode } from '@/lib/storeIdentity';
 import { Order, MenuItem, InventoryItem } from '@/lib/store';
 import { toUUID } from './useOrderSync'; // Assuming we keep toUUID or move it to a util file
 
