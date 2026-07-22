@@ -376,7 +376,7 @@ serve(async (req) => {
     // Create user role
     const plainPin = staffPin
     const plainPassword = password
-    const { data: newRole, error: roleInsertError } = await supabaseAdmin.from('user_roles').insert({
+    const { data: newRole, error: roleInsertError } = await supabaseAdmin.from('user_roles').upsert({
       user_id: userId,
       role: role || 'staff',
       customer_id: effectiveCustomerId,
@@ -389,7 +389,7 @@ serve(async (req) => {
       work_end_time: work_end_time || '18:00:00',
       fingerprint_enabled: fingerprint_enabled || false,
       salary: salary || 0,
-    }).select('staff_code').single()
+    }, { onConflict: 'user_id,role' }).select('staff_code').single()
 
 
     if (roleInsertError) {
