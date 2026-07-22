@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
-import { getCurrentStoreId } from '@/hooks/useCloudData';
+import { getCurrentStoreId } from '@/lib/storeIdentity';
 import {
   searchOrders, processReturn, fetchReturns, fetchCreditNotes,
   REASON_OPTIONS, REFUND_METHODS,

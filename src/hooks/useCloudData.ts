@@ -1,44 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCallback } from 'react';
+import { getCurrentStoreId, getCurrentStoreCode } from '@/lib/storeIdentity';
 
-// Unified helper to get the current store ID
-export const getCurrentStoreId = (): string | null => {
-  const ownerSelected = localStorage.getItem('owner_selected_store_id');
-  if (ownerSelected) return ownerSelected;
-
-  try {
-    const storeData = localStorage.getItem('pos_active_store_data');
-    if (storeData) {
-      const parsed = JSON.parse(storeData);
-      if (parsed?.id) return parsed.id;
-      if (parsed?.storeId) return parsed.storeId;
-    }
-  } catch {}
-  
-  const activeStore = localStorage.getItem('pos_active_store');
-  if (activeStore) {
-    try { return JSON.parse(activeStore); } catch {}
-  }
-  return null;
-};
-
-// Unified helper to get store code
-export const getCurrentStoreCode = (): string | null => {
-  const direct = localStorage.getItem('pos_store_code');
-  if (direct) return direct;
-  
-  try {
-    const storeData = localStorage.getItem('pos_active_store_data');
-    if (storeData) {
-      const parsed = JSON.parse(storeData);
-      if (parsed?.storeCode) return parsed.storeCode;
-      if (parsed?.store_code) return parsed.store_code;
-    }
-  } catch {}
-  
-  return null;
-};
+// Re-export identity helpers for backward compatibility.
+// New consumers should import from '@/lib/storeIdentity'.
+export { getCurrentStoreId, getCurrentStoreCode };
 
 // Generic fetcher using the edge function
 export const fetchCloudData = async (dataType: string, storeId: string, storeCode: string | null) => {
