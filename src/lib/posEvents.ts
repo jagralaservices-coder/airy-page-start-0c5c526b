@@ -27,7 +27,14 @@ export type PosEventName =
   | 'pos:order-cancelled'
   | 'pos:customer-updated'
   | 'pos:attendance-updated'
-  | 'pos:subscription-updated';
+  | 'pos:subscription-updated'
+  // Slice 5: Tables + KOT typed events.
+  | 'pos:table-updated'
+  | 'pos:table-status-changed'
+  | 'pos:kot-created'
+  | 'pos:kot-updated'
+  | 'pos:kot-completed'
+  | 'pos:kot-cancelled';
 
 export interface PosEventPayloads {
   'pos:store-changed': { storeId: string | null } | void;
@@ -45,6 +52,12 @@ export interface PosEventPayloads {
   'pos:customer-updated': { customerId?: string } | void;
   'pos:attendance-updated': { staffId?: string } | void;
   'pos:subscription-updated': void;
+  'pos:table-updated': { tableId?: string; storeId?: string | null } | void;
+  'pos:table-status-changed': { tableId?: string; status?: string; storeId?: string | null } | void;
+  'pos:kot-created': { kotId?: string; orderId?: string; storeId?: string | null } | void;
+  'pos:kot-updated': { kotId?: string; orderId?: string; storeId?: string | null } | void;
+  'pos:kot-completed': { kotId?: string; orderId?: string; storeId?: string | null } | void;
+  'pos:kot-cancelled': { kotId?: string; orderId?: string; storeId?: string | null } | void;
 }
 
 
