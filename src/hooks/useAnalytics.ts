@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getCreditPayments, getCreditLedger, safeMerge } from '@/lib/store';
 import { startOfDay, startOfWeek, startOfMonth, isAfter } from 'date-fns';
 import { useOwnerStore } from './useOwnerStore';
-import { useCloudData } from './useCloudData';
+import { useCreditLedgerQuery, useCreditPaymentsQuery } from '@/contexts/POSDataContext';
 import { dbToLocalCreditEntry, dbToLocalCreditPayment } from '@/lib/transformers';
 
 export type TimeRange = 'today' | 'week' | 'month' | 'all' | 'custom';
@@ -169,13 +169,16 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
   const posContext = useContext(POSContext);
   const { selectedStoreId, isOwner } = useOwnerStore();
 
-  const { data: cloudCreditLedger } = useCloudData('credit_ledger', (data) => {
-    return (data?.items || []).map(dbToLocalCreditEntry);
-  }, []);
-
-  const { data: cloudCreditPayments } = useCloudData('credit_payments', (data) => {
-    return (data?.items || []).map(dbToLocalCreditPayment);
-  }, []);
+  const { data: creditLedgerRows } = useCreditLedgerQuery();
+  const { data: creditPaymentsRows } = useCreditPaymentsQuery();
+  const cloudCreditLedger = useMemo(
+    () => (creditLedgerRows || []).map(dbToLocalCreditEntry),
+    [creditLedgerRows]
+  );
+  const cloudCreditPayments = useMemo(
+    () => (creditPaymentsRows || []).map(dbToLocalCreditPayment),
+    [creditPaymentsRows]
+  );
 
   const tables = posContext?.tables || [];
   const heldBills = posContext?.heldBills || [];
