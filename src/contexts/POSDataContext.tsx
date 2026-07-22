@@ -59,6 +59,9 @@ export const posQueryKeys = {
   recipes: (storeId: string | null) => ['pos', 'recipes', storeId] as const,
   heldBills: (storeId: string | null) => ['pos', 'held-bills', storeId] as const,
   offlineQueue: () => ['pos', 'offline-queue'] as const,
+  // Slice 7: Credit Ledger + Credit Payments — store-scoped ledger reads.
+  creditLedger: (storeId: string | null) => ['pos', 'credit-ledger', storeId] as const,
+  creditPayments: (storeId: string | null) => ['pos', 'credit-payments', storeId] as const,
 };
 
 export interface POSDataContextValue {
