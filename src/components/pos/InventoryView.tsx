@@ -55,7 +55,7 @@ import { BulkInventoryUpload } from './BulkInventoryUpload';
 import { useSubscription } from '@/hooks/useSubscription';
 
 import { useSaveCloudDataMutation, useDeleteCloudDataMutation } from '@/hooks/useCloudMutations';
-import { useMenuItemsQuery } from '@/contexts/POSDataContext';
+import { useInventoryQuery, useInventoryTransactionsQuery, useMenuItemsQuery } from '@/contexts/POSDataContext';
 
 type ViewType = 'main' | 'purchaseManagement' | 'requestForPurchase' | 'wastage' | 'addWastage' | 'convertRawMaterial' | 'currentStock' | 'openingClosing' | 'indentManagement' | 'productionExecution' | 'bulkUpload' | 'smartInventory' | 'inventoryHistory' | 'menuRecipes';
 
@@ -1290,6 +1290,44 @@ const ProductionExecutionView: React.FC<{ onBack: () => void }> = ({ onBack }) =
 };
 
 const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[] }> = ({ onBack, inventory }) => {
+  const [search, setSearch] = useState('');
+  const { data: cloudInventory = [] } = useInventoryQuery();
+  const { data: cloudMenuItems = [] } = useMenuItemsQuery();
+
+  const inventoryRows = useMemo(() => {
+    const source = cloudInventory.length > 0 ? cloudInventory : inventory;
+    return source.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      type: 'Raw Material',
+      quantity: Number(item.quantity ?? 0),
+      unit: item.unit || 'pcs',
+      costPerUnit: Number(item.costPerUnit ?? item.cost_per_unit ?? 0),
+      totalValue: Number(item.costPerUnit ?? item.cost_per_unit ?? 0) * Number(item.quantity ?? 0),
+    }));
+  }, [cloudInventory, inventory]);
+
+  const productRows = useMemo(() => (
+    (cloudMenuItems || [])
+      .filter((item: MenuItem) => item.stock !== undefined && item.stock !== null)
+      .map((item: MenuItem) => ({
+        id: item.id,
+        name: item.name,
+        type: 'Product Stock',
+        quantity: Number(item.stock ?? 0),
+        unit: 'pcs',
+        costPerUnit: 0,
+        totalValue: 0,
+      }))
+  ), [cloudMenuItems]);
+
+  const stockRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return [...productRows, ...inventoryRows].filter((item) =>
+      !q || item.name.toLowerCase().includes(q) || item.type.toLowerCase().includes(q),
+    );
+  }, [inventoryRows, productRows, search]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="sticky top-0 z-10 bg-background border-b border-border">
@@ -1307,7 +1345,12 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search..." className="pl-10 w-48" />
+            <Input
+              placeholder="Search..."
+              className="pl-10 w-48"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" className="gap-2">
@@ -1320,7 +1363,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
             </Button>
           </div>
         </div>
-        {inventory.length === 0 ? (
+        {stockRows.length === 0 ? (
           <EmptyState message="There is no record available." />
         ) : (
           <div className="border border-border rounded-lg overflow-hidden">
@@ -1328,6 +1371,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
               <thead className="bg-muted/30">
                 <tr>
                   <th className="text-left p-3 font-medium">Item Name</th>
+                  <th className="text-left p-3 font-medium">Type</th>
                   <th className="text-left p-3 font-medium">Quantity</th>
                   <th className="text-left p-3 font-medium">Unit</th>
                   <th className="text-left p-3 font-medium">Cost Per Unit</th>
@@ -1335,13 +1379,14 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
                 </tr>
               </thead>
               <tbody>
-                {inventory.map((item) => (
+                {stockRows.map((item) => (
                   <tr key={item.id} className="border-t border-border">
                     <td className="p-3">{item.name}</td>
-                    <td className="p-3 font-mono text-sm">{formatQuantityDisplay(item.quantity, item.unit)}</td>
+                    <td className="p-3 text-sm text-muted-foreground">{item.type}</td>
+                    <td className="p-3 font-mono text-sm">{item.quantity}</td>
                     <td className="p-3">{item.unit}</td>
-                    <td className="p-3">{formatCurrency(item.costPerUnit)}</td>
-                    <td className="p-3">{formatCurrency((item.quantity / 1000) * item.costPerUnit)}</td>
+                    <td className="p-3">{item.costPerUnit ? formatCurrency(item.costPerUnit) : '—'}</td>
+                    <td className="p-3">{item.totalValue ? formatCurrency(item.totalValue) : '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1521,12 +1566,47 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
 const InventoryHistoryView: React.FC<{ onBack: () => void; inventory: InventoryItem[] }> = ({ onBack, inventory }) => {
   const [tab, setTab] = useState<'purchase' | 'usage' | 'production'>('purchase');
   const [search, setSearch] = useState('');
-  const [entries, setEntries] = useState<InventoryHistoryEntry[]>(() => getInventoryHistory());
+  const [localEntries, setLocalEntries] = useState<InventoryHistoryEntry[]>(() => getInventoryHistory());
+  const { data: cloudTransactions = [] } = useInventoryTransactionsQuery();
+  const { data: cloudMenuItems = [] } = useMenuItemsQuery();
 
   // Refresh on tab switch (cheap; localStorage read)
   React.useEffect(() => {
-    setEntries(getInventoryHistory());
+    setLocalEntries(getInventoryHistory());
   }, [tab]);
+
+  const entries = useMemo<InventoryHistoryEntry[]>(() => {
+    const cloudEntries = (cloudTransactions || []).map((tx: any): InventoryHistoryEntry => {
+      const qty = Math.abs(Number(tx.qty_delta ?? 0));
+      const menuItem = (cloudMenuItems || []).find((item: MenuItem) => item.id === tx.inventory_item_id);
+      const inventoryItem = inventory.find((item) => item.id === tx.inventory_item_id);
+      const source = String(tx.source || 'usage');
+      const type: InventoryHistoryEntry['type'] = source.includes('production')
+        ? 'production'
+        : (source.includes('purchase') || source.includes('stock_add') ? 'purchase' : 'usage');
+
+      return {
+        id: `cloud-${tx.id}`,
+        type,
+        storeId: tx.store_id || '',
+        inventoryId: tx.inventory_item_id,
+        inventoryName: inventoryItem?.name || menuItem?.name || 'Stock item',
+        quantity: qty,
+        unit: tx.unit || (menuItem ? 'pcs' : inventoryItem?.unit || 'pcs'),
+        source: tx.notes || tx.source || undefined,
+        menuItemId: menuItem?.id,
+        menuItemName: menuItem?.name,
+        menuItemQuantity: menuItem ? qty : undefined,
+        orderId: tx.order_id || undefined,
+        billNumber: tx.reference || undefined,
+        createdAt: tx.created_at || new Date().toISOString(),
+      };
+    });
+
+    const byId = new Map<string, InventoryHistoryEntry>();
+    [...cloudEntries, ...localEntries].forEach((entry) => byId.set(entry.id, entry));
+    return Array.from(byId.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [cloudTransactions, cloudMenuItems, inventory, localEntries]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
