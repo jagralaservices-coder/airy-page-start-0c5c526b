@@ -1657,7 +1657,11 @@ const InventoryHistoryView: React.FC<{ onBack: () => void; inventory: InventoryI
 
 // Menu Recipes - link inventory ingredients to menu items
 const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+  const { data: cloudMenuItems } = useMenuItemsQuery();
   const [items, setItems] = useState<MenuItem[]>(getMenuItems());
+  React.useEffect(() => {
+    if (cloudMenuItems) setItems(cloudMenuItems as MenuItem[]);
+  }, [cloudMenuItems]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [selected, setSelected] = useState<MenuItem | null>(null);
