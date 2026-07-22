@@ -199,6 +199,15 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.all })),
       onPosEvent('pos:inventory-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:inventory-adjusted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:stock-deducted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:recipe-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
+
       onPosEvent('pos:menu-updated', () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.menuItems(activeStoreId) });
         queryClient.invalidateQueries({ queryKey: posQueryKeys.categories(activeStoreId) });
