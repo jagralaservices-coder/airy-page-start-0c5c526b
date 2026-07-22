@@ -122,7 +122,12 @@ export const useInventoryDeduction = () => {
         );
       }
 
+      // Slice 4: notify POSDataContext so every consumer's inventory cache
+      // refreshes without a manual signal. Recipe deduction path already
+      // wrote to inventory_items; the event bus fans that out.
+      try { emitPosEvent('pos:stock-deducted', { orderId, storeId }); } catch {}
       return { success: true, lowStockItems };
+
     } catch (err) {
       console.error('[InventoryDeduction] Error:', err);
       return { success: false, lowStockItems: [] };
