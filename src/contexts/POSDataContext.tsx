@@ -258,7 +258,20 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
       onPosEvent('pos:products-updated', () =>
         queryClient.invalidateQueries({ queryKey: ['pos', 'products'] })),
-
+      // Slice 5: Tables + KOT typed events → cache invalidation only. No
+      // global refresh; each event narrows to its own store-scoped key.
+      onPosEvent('pos:table-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.tables(activeStoreId) })),
+      onPosEvent('pos:table-status-changed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.tables(activeStoreId) })),
+      onPosEvent('pos:kot-created', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      onPosEvent('pos:kot-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      onPosEvent('pos:kot-completed', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
+      onPosEvent('pos:kot-cancelled', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.kot(activeStoreId) })),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
