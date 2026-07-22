@@ -50,7 +50,12 @@ export type PosEventName =
   | 'pos:queue-updated'
   // Slice 8: Expenses + Reports/Dashboard/Analytics derived caches.
   | 'pos:expense-updated'
-  | 'pos:reports-refreshed';
+  | 'pos:reports-refreshed'
+  // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll read models.
+  | 'pos:staff-updated'
+  | 'pos:leave-updated'
+  | 'pos:shift-updated'
+  | 'pos:payroll-updated';
 
 export interface PosEventPayloads {
   'pos:store-changed': { storeId: string | null } | void;
@@ -90,6 +95,11 @@ export interface PosEventPayloads {
   // Slice 8: Expenses + derived cache refresh events.
   'pos:expense-updated': { expenseId?: string; storeId?: string | null } | void;
   'pos:reports-refreshed': { storeId?: string | null; reportType?: string } | void;
+  // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll payloads.
+  'pos:staff-updated': { staffId?: string; storeId?: string | null } | void;
+  'pos:leave-updated': { leaveId?: string; staffId?: string; status?: string } | void;
+  'pos:shift-updated': { shiftId?: string; storeId?: string | null } | void;
+  'pos:payroll-updated': { staffId?: string; period?: string } | void;
 }
 
 

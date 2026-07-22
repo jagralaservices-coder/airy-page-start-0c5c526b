@@ -69,6 +69,16 @@ export const posQueryKeys = {
   dashboard: (storeId: string | null, range: string) => ['pos', 'dashboard', storeId, range] as const,
   analyticsSummary: (storeId: string | null, range: string) =>
     ['pos', 'analytics', storeId, range] as const,
+  // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll read models.
+  staff: (merchantId: string | null, storeId: string | null) =>
+    ['pos', 'staff', merchantId, storeId] as const,
+  attendance: (storeId: string | null, range?: string) =>
+    ['pos', 'attendance', storeId, range ?? 'all'] as const,
+  leaves: (merchantId: string | null, storeId: string | null) =>
+    ['pos', 'leaves', merchantId, storeId] as const,
+  shifts: (storeId: string | null) => ['pos', 'shifts', storeId] as const,
+  payroll: (merchantId: string | null, storeId: string | null, period?: string) =>
+    ['pos', 'payroll', merchantId, storeId, period ?? 'current'] as const,
 };
 
 export interface POSDataContextValue {
@@ -223,6 +233,79 @@ async function fetchExpenses(storeId: string): Promise<any[]> {
   return (data?.items || []) as any[];
 }
 
+// ---------------------------------------------------------------------------
+// Slice 9: Staff / Attendance / Leaves / Shifts / Payroll — read models only.
+// Write paths (create/update/delete staff, check-in/out, leave approvals,
+// payroll runs) continue to live in their existing hooks / edge functions.
+// Face verification, GPS, geo-fencing, camera and check-in/out business logic
+// are intentionally untouched — these fetchers are strictly the read + cache
+// surface consumers should prefer over ad-hoc supabase queries.
+// ---------------------------------------------------------------------------
+async function fetchStaff(merchantId: string, storeId: string | null): Promise<any[]> {
+  let q: any = supabase.from('staff').select('*').eq('merchant_id', merchantId);
+  if (storeId) q = q.eq('store_id', storeId);
+  const { data, error } = await q.order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []) as any[];
+}
+async function fetchAttendance(storeId: string, range?: { start: string; end: string }): Promise<any[]> {
+  let q: any = supabase.from('staff_attendance').select('*').eq('store_id', storeId);
+  if (range?.start) q = q.gte('date', range.start);
+  if (range?.end) q = q.lte('date', range.end);
+  const { data, error } = await q.order('date', { ascending: false }).limit(1000);
+  if (error) throw error;
+  return (data || []) as any[];
+}
+async function fetchLeaves(merchantId: string, storeId: string | null): Promise<any[]> {
+  // leave_requests may not be present in generated types on every project;
+  // cast to any so this compiles regardless while remaining runtime-safe.
+  let q: any = (supabase as any).from('leave_requests').select('*');
+  if (storeId) q = q.eq('store_id', storeId);
+  else q = q.eq('merchant_id', merchantId);
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+  if (error) {
+    // Missing table / permission → return empty rather than throwing so pages
+    // that mount this hook stay usable on projects without the leave schema.
+    console.warn('[POSDataContext] fetchLeaves suppressed error:', error?.message);
+    return [];
+  }
+  return (data || []) as any[];
+}
+async function fetchShifts(storeId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('cashier_shifts')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return (data || []) as any[];
+}
+async function fetchPayroll(
+  merchantId: string,
+  storeId: string | null,
+  period?: string,
+): Promise<any[]> {
+  // Payroll table isn't guaranteed on every project (may live in a future
+  // schema or be computed off staff_attendance). Attempt the read and fall
+  // back to [] so consumers can render an empty state gracefully.
+  try {
+    let q: any = (supabase as any).from('payroll').select('*');
+    if (storeId) q = q.eq('store_id', storeId);
+    else q = q.eq('merchant_id', merchantId);
+    if (period) q = q.eq('period', period);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+    if (error) {
+      console.warn('[POSDataContext] fetchPayroll suppressed error:', error?.message);
+      return [];
+    }
+    return (data || []) as any[];
+  } catch (e: any) {
+    console.warn('[POSDataContext] fetchPayroll threw:', e?.message);
+    return [];
+  }
+}
+
 
 
 // ---------------------------------------------------------------------------
@@ -302,6 +385,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
         queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
       }),
+      // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll — realtime
+      // read-model invalidation only. Business logic (check-in, face
+      // verification, GPS, leave approval, payroll runs) is untouched.
+      // `staff` and `leave_requests` are merchant-scoped in schema; we
+      // subscribe without a store filter and let the cache key scope reads.
+      ...(merchantId ? [
+        realtime.subscribe({ table: 'staff', filter: `merchant_id=eq.${merchantId}` }, () =>
+          queryClient.invalidateQueries({ queryKey: ['pos', 'staff', merchantId] })),
+        realtime.subscribe({ table: 'leave_requests' as any, filter: `merchant_id=eq.${merchantId}` }, () =>
+          queryClient.invalidateQueries({ queryKey: ['pos', 'leaves', merchantId] })),
+        realtime.subscribe({ table: 'payroll' as any, filter: `merchant_id=eq.${merchantId}` }, () =>
+          queryClient.invalidateQueries({ queryKey: ['pos', 'payroll', merchantId] })),
+      ] : []),
+      realtime.subscribe({ table: 'staff_attendance', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'attendance', activeStoreId] })),
+      realtime.subscribe({ table: 'cashier_shifts', filter }, () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.shifts(activeStoreId) })),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
@@ -405,6 +505,20 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
         queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
       }),
+      // Slice 9: Staff / Attendance / Leaves / Shifts / Payroll typed events.
+      // Handlers only invalidate — never imperatively refetch — so writers
+      // (check-in, leave approve, shift close, payroll run) emit and every
+      // subscribed screen refreshes from one cache.
+      onPosEvent('pos:staff-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'staff', merchantId] })),
+      onPosEvent('pos:attendance-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'attendance', activeStoreId] })),
+      onPosEvent('pos:leave-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'leaves', merchantId] })),
+      onPosEvent('pos:shift-updated', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.shifts(activeStoreId) })),
+      onPosEvent('pos:payroll-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'payroll', merchantId] })),
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
@@ -898,4 +1012,86 @@ export function useDashboardQuery(range: 'today' | 'week' | 'month' | 'all' = 't
 // fetch. This is intentionally a derived selector, not a new fetch.
 export function useAnalyticsSummaryQuery(range: 'today' | 'week' | 'month' | 'all' = 'today') {
   return useDashboardQuery(range);
+}
+
+// ---------------------------------------------------------------------------
+// Slice 9: Staff / Attendance / Leaves / Shifts / Payroll — query hooks.
+// Single owner for read models. Writes (create staff, check-in/out, leave
+// approve, shift close, payroll run) still live in their existing hooks and
+// edge functions; these hooks are strictly the read + cache surface.
+// Face verification, GPS, geo-fencing and camera flows are untouched.
+// ---------------------------------------------------------------------------
+export function useStaffQuery(opts?: QOpts<any[]>) {
+  const { merchantId } = useMerchant();
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.staff(merchantId, activeStoreId),
+    queryFn: () => fetchStaff(merchantId!, activeStoreId),
+    enabled: !!merchantId,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export interface AttendanceRange { start: string; end: string }
+export function useAttendanceQuery(range?: AttendanceRange, opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  const rangeKey = range ? `${range.start}_${range.end}` : 'all';
+  return useQuery({
+    queryKey: posQueryKeys.attendance(activeStoreId, rangeKey),
+    queryFn: () => fetchAttendance(activeStoreId!, range),
+    enabled: !!activeStoreId,
+    staleTime: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export function useLeavesQuery(opts?: QOpts<any[]>) {
+  const { merchantId } = useMerchant();
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.leaves(merchantId, activeStoreId),
+    queryFn: () => fetchLeaves(merchantId!, activeStoreId),
+    enabled: !!merchantId,
+    staleTime: 30_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export function useShiftsQuery(opts?: QOpts<any[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.shifts(activeStoreId),
+    queryFn: () => fetchShifts(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
+    ...opts,
+  });
+}
+
+export function usePayrollQuery(period?: string, opts?: QOpts<any[]>) {
+  const { merchantId } = useMerchant();
+  const { activeStoreId } = useStore();
+  return useQuery({
+    queryKey: posQueryKeys.payroll(merchantId, activeStoreId, period),
+    queryFn: () => fetchPayroll(merchantId!, activeStoreId, period),
+    enabled: !!merchantId,
+    staleTime: 60_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    initialData: [] as any[],
+    ...opts,
+  });
 }
