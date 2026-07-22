@@ -98,6 +98,16 @@ async function fetchOrders(storeId: string): Promise<Order[]> {
   const data = await fetchCloudData('orders', storeId, storeCode);
   return ((data?.orders || []) as any[]).map(dbToLocalOrder);
 }
+// Slice 6: Held Bills — single owner for the held-bills read path. Cart
+// consumers should read via useHeldBillsQuery so every mount hits one cache
+// and realtime + typed events fan out to every screen at once. Writes still
+// flow through POSContext.holdBill / mergeBills / deleteHeldBill; this hook
+// is strictly the read + cache surface.
+async function fetchHeldBills(storeId: string): Promise<HeldBill[]> {
+  const storeCode = getCurrentStoreCode();
+  const data = await fetchCloudData('held_bills', storeId, storeCode);
+  return ((data?.items || []) as any[]).map(dbToLocalHeldBill);
+}
 async function fetchProducts(storeId: string) {
   const { data, error } = await supabase
     .from('products').select('*').eq('store_id', storeId);
