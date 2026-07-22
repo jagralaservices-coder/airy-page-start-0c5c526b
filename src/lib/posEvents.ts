@@ -87,6 +87,9 @@ export interface PosEventPayloads {
   'pos:sync-completed': { storeId?: string | null; drained?: number } | void;
   'pos:sync-failed': { storeId?: string | null; error?: string } | void;
   'pos:queue-updated': { pending?: number; poisoned?: number } | void;
+  // Slice 8: Expenses + derived cache refresh events.
+  'pos:expense-updated': { expenseId?: string; storeId?: string | null } | void;
+  'pos:reports-refreshed': { storeId?: string | null; reportType?: string } | void;
 }
 
 
