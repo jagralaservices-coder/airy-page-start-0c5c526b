@@ -2737,6 +2737,57 @@ export type Database = {
           },
         ]
       }
+      inventory_transactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          inventory_item_id: string
+          merchant_id: string | null
+          notes: string | null
+          order_id: string | null
+          qty_after: number | null
+          qty_before: number | null
+          qty_delta: number
+          reference: string | null
+          source: string
+          store_id: string | null
+          unit: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_item_id: string
+          merchant_id?: string | null
+          notes?: string | null
+          order_id?: string | null
+          qty_after?: number | null
+          qty_before?: number | null
+          qty_delta: number
+          reference?: string | null
+          source: string
+          store_id?: string | null
+          unit?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          inventory_item_id?: string
+          merchant_id?: string | null
+          notes?: string | null
+          order_id?: string | null
+          qty_after?: number | null
+          qty_before?: number | null
+          qty_delta?: number
+          reference?: string | null
+          source?: string
+          store_id?: string | null
+          unit?: string | null
+        }
+        Relationships: []
+      }
       journal_entries: {
         Row: {
           approved_at: string | null
