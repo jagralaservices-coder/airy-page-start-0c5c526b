@@ -317,6 +317,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       onPosEvent('pos:customer-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      onPosEvent('pos:customer-created', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      onPosEvent('pos:customer-deleted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      // Slice 7: Credit typed events → cache invalidation only.
+      onPosEvent('pos:credit-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      onPosEvent('pos:credit-payment-added', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+      }),
+      onPosEvent('pos:credit-cleared', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) });
+      }),
       onPosEvent('pos:products-updated', () =>
         queryClient.invalidateQueries({ queryKey: ['pos', 'products'] })),
       // Slice 5: Tables + KOT typed events → cache invalidation only. No
