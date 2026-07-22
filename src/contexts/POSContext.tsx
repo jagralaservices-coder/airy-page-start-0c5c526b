@@ -1356,6 +1356,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const inventoryChanges: string[] = [];
     const autoProductionLog: string[] = [];
     const activeReductionStoreId = sourceOrder?.storeId || activeStoreId || localStorage.getItem('pos_active_store') || JSON.parse(localStorage.getItem('pos_active_store_data') || '{}')?.id || null;
+    const activeReductionMerchantId = (activeStore as any)?.customer_id || (activeStore as any)?.merchant_id || JSON.parse(localStorage.getItem('pos_active_store_data') || '{}')?.customer_id || null;
     const isUuid = (value?: string | null) => !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
     const insertInventoryTransaction = async (row: {
       inventory_item_id: string;
@@ -1371,6 +1372,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!row.store_id || !isUuid(row.inventory_item_id)) return;
       const { error } = await supabase.from('inventory_transactions' as any).insert({
         ...row,
+        merchant_id: activeReductionMerchantId,
         order_id: isUuid(sourceOrder?.id) ? sourceOrder?.id : null,
       });
       if (error) console.warn('[reduceStock] inventory transaction log failed:', error);
@@ -1622,7 +1624,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       insertInventoryTransaction({
         inventory_item_id: updatedInvItem.id,
         store_id: activeReductionStoreId,
-        source: 'recipe_usage',
+        source: 'sale',
         qty_delta: -Math.abs(quantityToDeduct),
         qty_before: oldQuantity,
         qty_after: newQuantity,
@@ -1673,7 +1675,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await insertInventoryTransaction({
           inventory_item_id: menuItem.id,
           store_id: activeReductionStoreId,
-          source: 'product_stock_sale',
+          source: 'sale',
           qty_delta: -Math.abs(cartItem.quantity),
           qty_before: oldStock,
           qty_after: newStock,
