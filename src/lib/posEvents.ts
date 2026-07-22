@@ -20,6 +20,8 @@ export type PosEventName =
   | 'pos:products-updated'
   | 'pos:order-created'
   | 'pos:order-updated'
+  | 'pos:order-completed'
+  | 'pos:order-cancelled'
   | 'pos:customer-updated'
   | 'pos:attendance-updated'
   | 'pos:subscription-updated';
@@ -32,6 +34,8 @@ export interface PosEventPayloads {
   'pos:products-updated': { productId?: string; storeId?: string | null } | void;
   'pos:order-created': { orderId: string; storeId?: string | null } | void;
   'pos:order-updated': { orderId: string; storeId?: string | null } | void;
+  'pos:order-completed': { orderId?: string; storeId?: string | null } | void;
+  'pos:order-cancelled': { orderId?: string; storeId?: string | null } | void;
   'pos:customer-updated': { customerId?: string } | void;
   'pos:attendance-updated': { staffId?: string } | void;
   'pos:subscription-updated': void;

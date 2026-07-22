@@ -74,7 +74,15 @@ export const useSaveOrderMutation = () => {
       return data;
     },
     onSuccess: () => {
+      // Legacy cloudData cache
       queryClient.invalidateQueries({ queryKey: ['cloudData', storeId, 'orders'] });
+      // Slice 3: POSDataContext shared cache + typed event bus so every
+      // consumer (owner dashboard, cashier billing, order lists) refreshes
+      // from the single source of truth.
+      queryClient.invalidateQueries({ queryKey: ['pos', 'orders', storeId] });
+      try {
+        window.dispatchEvent(new CustomEvent('pos:order-updated', { detail: { storeId } }));
+      } catch {}
     },
   });
 };
