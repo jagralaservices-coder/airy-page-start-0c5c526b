@@ -119,6 +119,32 @@ async function fetchInventory(storeId: string) {
   if (error) throw error;
   return data || [];
 }
+// Slice 4: Recipes — inventory_components rows scoped to the parent items in
+// the active store. Filtered client-side on parent store because
+// inventory_components has no store_id column of its own; we fetch parent
+// inventory ids first, then components. Consumers should read via
+// useRecipesQuery instead of touching supabase directly.
+export interface RecipeComponent {
+  id: string;
+  parent_inventory_id: string;
+  child_inventory_id: string;
+  quantity_required: number;
+  unit: string;
+}
+async function fetchRecipes(storeId: string): Promise<RecipeComponent[]> {
+  const { data: parents, error: pErr } = await supabase
+    .from('inventory_items').select('id').eq('store_id', storeId);
+  if (pErr) throw pErr;
+  const parentIds = (parents || []).map((r: any) => r.id);
+  if (parentIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('inventory_components')
+    .select('id, parent_inventory_id, child_inventory_id, quantity_required, unit')
+    .in('parent_inventory_id', parentIds);
+  if (error) throw error;
+  return (data || []) as RecipeComponent[];
+}
+
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -148,11 +174,23 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       realtime.subscribe({ table: 'restaurant_tables', filter }, () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.tables(activeStoreId) })),
-      realtime.subscribe({ table: 'inventory_items', filter }, () =>
-        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      realtime.subscribe({ table: 'inventory_items', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
+      // inventory_components has no store_id column, so subscribe without a
+      // filter and invalidate the store-scoped recipes cache. RealtimeContext
+      // dedupes channels so this stays a single connection.
+      realtime.subscribe({ table: 'inventory_components' }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
+      }),
+      // inventory_transactions logs (audit) also implies stock changed.
+      realtime.subscribe({ table: 'inventory_transactions', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
+
 
   // Cross-hook event bus → cache invalidation.
   React.useEffect(() => {
@@ -161,6 +199,15 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.all })),
       onPosEvent('pos:inventory-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:inventory-adjusted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:stock-deducted', () =>
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) })),
+      onPosEvent('pos:recipe-updated', () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.recipes(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.inventory(activeStoreId) });
+      }),
+
       onPosEvent('pos:menu-updated', () => {
         queryClient.invalidateQueries({ queryKey: posQueryKeys.menuItems(activeStoreId) });
         queryClient.invalidateQueries({ queryKey: posQueryKeys.categories(activeStoreId) });
@@ -309,13 +356,39 @@ export function useTablesQuery(opts?: QOpts<any[]>) {
     ...opts,
   });
 }
+// Slice 4: Inventory + Recipes — single owner for the inventory read path.
+// Consumers should prefer these hooks over ad-hoc supabase queries so every
+// mount hits the same cache and every realtime/event invalidation reaches
+// every screen at once. Writes (adjustments, deductions, recipe edits) still
+// flow through existing mutation code paths (useInventoryDeduction,
+// useStoreDataSync, POSContext.reduceStock); these hooks are strictly the
+// read + cache surface.
 export function useInventoryQuery(opts?: QOpts<any[]>) {
   const { activeStoreId } = useStore();
   return useQuery({
     queryKey: posQueryKeys.inventory(activeStoreId),
     queryFn: () => fetchInventory(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
     ...opts,
   });
 }
+export function useRecipesQuery(opts?: QOpts<RecipeComponent[]>) {
+  const { activeStoreId } = useStore();
+  return useQuery<RecipeComponent[]>({
+    queryKey: posQueryKeys.recipes(activeStoreId),
+    queryFn: () => fetchRecipes(activeStoreId!),
+    enabled: !!activeStoreId,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as RecipeComponent[],
+    ...opts,
+  });
+}
+

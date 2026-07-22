@@ -1704,7 +1704,15 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (inventoryUpdated) {
       console.log('[reduceStock] Saving updated inventory to localStorage, items updated:', inventoryChanges.length);
       setInventory(currentInventory);
+      // Slice 4: fan-out through the typed event bus so POSDataContext's
+      // inventory cache invalidates for every consumer without a bespoke
+      // signal. Business logic above is unchanged.
+      try {
+        const { emitPosEvent } = await import('@/lib/posEvents');
+        emitPosEvent('pos:inventory-adjusted');
+      } catch {}
     }
+
     
     // Show stock update notification
     if (stockChanges.length > 0) {
@@ -1788,7 +1796,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (inventoryUpdated) {
       setInventory(currentInventory);
       window.dispatchEvent(new Event('storage'));
+      try {
+        const { emitPosEvent } = await import('@/lib/posEvents');
+        emitPosEvent('pos:inventory-adjusted');
+      } catch {}
     }
+
 
     if (stockChanges.length > 0) {
       toast.success('Menu Stock Restored', {
