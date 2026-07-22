@@ -1773,6 +1773,7 @@ const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                   <div className="flex items-center gap-2 bg-secondary/30 p-1.5 rounded-xl border border-border/50" onClick={e => e.stopPropagation()}>
                     <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap pl-1">Product Stock:</span>
                     <Input
+                      key={`stock-${item.id}-${item.stock ?? 'none'}`}
                       type="number"
                       placeholder="∞"
                       defaultValue={item.stock !== undefined ? item.stock : ''}
