@@ -24,7 +24,8 @@ export const useInventoryDeduction = () => {
    */
   const deductInventoryForOrder = useCallback(async (
     storeId: string,
-    items: OrderItem[]
+    items: OrderItem[],
+    orderId?: string
   ): Promise<{ success: boolean; lowStockItems: string[] }> => {
     const lowStockItems: string[] = [];
 
@@ -34,8 +35,17 @@ export const useInventoryDeduction = () => {
     }
 
     try {
+      // Resolve merchant + current user for audit trail
+      const { data: storeRow } = await supabase
+        .from('stores')
+        .select('merchant_id, customer_id')
+        .eq('id', storeId)
+        .maybeSingle();
+      const merchantId = (storeRow as any)?.merchant_id || (storeRow as any)?.customer_id || null;
+      const { data: authData } = await supabase.auth.getUser();
+      const userId = authData?.user?.id || null;
+
       for (const item of items) {
-        // Find linked ingredients for this menu item
         const { data: ingredients, error: ingError } = await supabase
           .from('menu_item_ingredients')
           .select('inventory_item_id, quantity_required, unit')
@@ -44,7 +54,6 @@ export const useInventoryDeduction = () => {
         if (ingError || !ingredients || ingredients.length === 0) continue;
 
         for (const ingredient of ingredients) {
-          // Get current stock (scoped to owner's store == active store)
           const { data: invItem, error: invError } = await supabase
             .from('inventory_items')
             .select('id, name, quantity, min_stock, unit')
@@ -54,7 +63,6 @@ export const useInventoryDeduction = () => {
 
           if (invError || !invItem) continue;
 
-          // Unit-mismatch guard — refuse silent bad math
           if (ingredient.unit && invItem.unit && ingredient.unit !== invItem.unit) {
             console.warn('[InventoryDeduction] Unit mismatch, skipping', {
               menuItem: item.id,
@@ -66,18 +74,40 @@ export const useInventoryDeduction = () => {
           }
 
           const totalDeduction = Number(ingredient.quantity_required) * item.quantity;
-          const newQuantity = Number(invItem.quantity) - totalDeduction;
+          const qtyBefore = Number(invItem.quantity);
+          const qtyAfter = qtyBefore - totalDeduction;
 
-          await supabase
+          const { error: updErr } = await supabase
             .from('inventory_items')
-            .update({
-              quantity: newQuantity,
-              updated_at: new Date().toISOString(),
-            })
+            .update({ quantity: qtyAfter, updated_at: new Date().toISOString() })
             .eq('id', invItem.id)
             .eq('store_id', storeId);
 
-          if (newQuantity <= Number(invItem.min_stock)) {
+          if (updErr) {
+            console.error('[InventoryDeduction] update failed', updErr);
+            continue;
+          }
+
+          // Audit log — best-effort, never blocks the sale
+          try {
+            await (supabase as any).from('inventory_transactions').insert({
+              inventory_item_id: invItem.id,
+              store_id: storeId,
+              merchant_id: merchantId,
+              order_id: orderId || null,
+              source: 'sale',
+              qty_delta: -totalDeduction,
+              qty_before: qtyBefore,
+              qty_after: qtyAfter,
+              unit: invItem.unit || ingredient.unit || null,
+              reference: item.name,
+              created_by: userId,
+            });
+          } catch (logErr) {
+            console.warn('[InventoryDeduction] audit log failed', logErr);
+          }
+
+          if (qtyAfter <= Number(invItem.min_stock)) {
             lowStockItems.push(invItem.name);
           }
         }
@@ -96,6 +126,7 @@ export const useInventoryDeduction = () => {
       return { success: false, lowStockItems: [] };
     }
   }, [hasRecipeDeduction]);
+
 
   /**
    * Check all inventory items for low stock
