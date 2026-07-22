@@ -294,6 +294,14 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.creditPayments(activeStoreId) });
         queryClient.invalidateQueries({ queryKey: posQueryKeys.creditLedger(activeStoreId) });
       }),
+      // Slice 8: Expenses — store-scoped. Changes also invalidate derived
+      // dashboard/analytics caches so KPIs recompute from one source.
+      realtime.subscribe({ table: 'expenses', filter }, () => {
+        queryClient.invalidateQueries({ queryKey: posQueryKeys.expenses(activeStoreId) });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'dashboard', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'analytics', activeStoreId] });
+        queryClient.invalidateQueries({ queryKey: ['pos', 'reports', activeStoreId] });
+      }),
     ];
     return () => subs.forEach((u) => u());
   }, [isReady, activeStoreId, merchantId, realtime, queryClient]);
