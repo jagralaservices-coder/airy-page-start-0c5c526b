@@ -62,6 +62,13 @@ export const posQueryKeys = {
   // Slice 7: Credit Ledger + Credit Payments — store-scoped ledger reads.
   creditLedger: (storeId: string | null) => ['pos', 'credit-ledger', storeId] as const,
   creditPayments: (storeId: string | null) => ['pos', 'credit-payments', storeId] as const,
+  // Slice 8: Expenses, Reports, Dashboard, Analytics.
+  expenses: (storeId: string | null) => ['pos', 'expenses', storeId] as const,
+  reports: (storeId: string | null, reportType: string, start: string, end: string, extra?: string) =>
+    ['pos', 'reports', storeId, reportType, start, end, extra ?? ''] as const,
+  dashboard: (storeId: string | null, range: string) => ['pos', 'dashboard', storeId, range] as const,
+  analyticsSummary: (storeId: string | null, range: string) =>
+    ['pos', 'analytics', storeId, range] as const,
 };
 
 export interface POSDataContextValue {
