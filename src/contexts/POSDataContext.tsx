@@ -233,6 +233,79 @@ async function fetchExpenses(storeId: string): Promise<any[]> {
   return (data?.items || []) as any[];
 }
 
+// ---------------------------------------------------------------------------
+// Slice 9: Staff / Attendance / Leaves / Shifts / Payroll — read models only.
+// Write paths (create/update/delete staff, check-in/out, leave approvals,
+// payroll runs) continue to live in their existing hooks / edge functions.
+// Face verification, GPS, geo-fencing, camera and check-in/out business logic
+// are intentionally untouched — these fetchers are strictly the read + cache
+// surface consumers should prefer over ad-hoc supabase queries.
+// ---------------------------------------------------------------------------
+async function fetchStaff(merchantId: string, storeId: string | null): Promise<any[]> {
+  let q: any = supabase.from('staff').select('*').eq('merchant_id', merchantId);
+  if (storeId) q = q.eq('store_id', storeId);
+  const { data, error } = await q.order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []) as any[];
+}
+async function fetchAttendance(storeId: string, range?: { start: string; end: string }): Promise<any[]> {
+  let q: any = supabase.from('staff_attendance').select('*').eq('store_id', storeId);
+  if (range?.start) q = q.gte('date', range.start);
+  if (range?.end) q = q.lte('date', range.end);
+  const { data, error } = await q.order('date', { ascending: false }).limit(1000);
+  if (error) throw error;
+  return (data || []) as any[];
+}
+async function fetchLeaves(merchantId: string, storeId: string | null): Promise<any[]> {
+  // leave_requests may not be present in generated types on every project;
+  // cast to any so this compiles regardless while remaining runtime-safe.
+  let q: any = (supabase as any).from('leave_requests').select('*');
+  if (storeId) q = q.eq('store_id', storeId);
+  else q = q.eq('merchant_id', merchantId);
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+  if (error) {
+    // Missing table / permission → return empty rather than throwing so pages
+    // that mount this hook stay usable on projects without the leave schema.
+    console.warn('[POSDataContext] fetchLeaves suppressed error:', error?.message);
+    return [];
+  }
+  return (data || []) as any[];
+}
+async function fetchShifts(storeId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('cashier_shifts')
+    .select('*')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return (data || []) as any[];
+}
+async function fetchPayroll(
+  merchantId: string,
+  storeId: string | null,
+  period?: string,
+): Promise<any[]> {
+  // Payroll table isn't guaranteed on every project (may live in a future
+  // schema or be computed off staff_attendance). Attempt the read and fall
+  // back to [] so consumers can render an empty state gracefully.
+  try {
+    let q: any = (supabase as any).from('payroll').select('*');
+    if (storeId) q = q.eq('store_id', storeId);
+    else q = q.eq('merchant_id', merchantId);
+    if (period) q = q.eq('period', period);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(500);
+    if (error) {
+      console.warn('[POSDataContext] fetchPayroll suppressed error:', error?.message);
+      return [];
+    }
+    return (data || []) as any[];
+  } catch (e: any) {
+    console.warn('[POSDataContext] fetchPayroll threw:', e?.message);
+    return [];
+  }
+}
+
 
 
 // ---------------------------------------------------------------------------
