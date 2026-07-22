@@ -622,6 +622,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       const isStaffScopedRole = ['staff', 'cashier'].includes(String((roleData as any)?.role || '').toLowerCase());
+      const resolvedMerchantId = (roleData as any)?.merchant_id || (roleData as any)?.customer_id || null;
 
       if (!resolvedMerchantId && !isStaffScopedRole) {
         // Allow super_admin and admin to proceed without a merchant_id
