@@ -17,6 +17,7 @@ export type PosEventName =
   | 'pos:active-store-changed' // legacy alias, always co-emitted with store-changed
   | 'pos:inventory-updated'
   | 'pos:menu-updated'
+  | 'pos:products-updated'
   | 'pos:order-created'
   | 'pos:order-updated'
   | 'pos:customer-updated'
@@ -28,12 +29,14 @@ export interface PosEventPayloads {
   'pos:active-store-changed': { storeId: string | null } | void;
   'pos:inventory-updated': { itemId?: string; storeId?: string | null } | void;
   'pos:menu-updated': { storeId?: string | null } | void;
+  'pos:products-updated': { productId?: string; storeId?: string | null } | void;
   'pos:order-created': { orderId: string; storeId?: string | null } | void;
   'pos:order-updated': { orderId: string; storeId?: string | null } | void;
   'pos:customer-updated': { customerId?: string } | void;
   'pos:attendance-updated': { staffId?: string } | void;
   'pos:subscription-updated': void;
 }
+
 
 export function emitPosEvent<T extends PosEventName>(
   name: T,

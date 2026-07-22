@@ -166,6 +166,9 @@ export const POSDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         queryClient.invalidateQueries({ queryKey: posQueryKeys.orders(activeStoreId) })),
       onPosEvent('pos:customer-updated', () =>
         queryClient.invalidateQueries({ queryKey: posQueryKeys.customers(merchantId) })),
+      onPosEvent('pos:products-updated', () =>
+        queryClient.invalidateQueries({ queryKey: ['pos', 'products'] })),
+
     ];
     return () => offs.forEach((o) => o());
   }, [queryClient, activeStoreId, merchantId]);
@@ -247,10 +250,15 @@ export function useProductsQuery(opts?: QOpts<any[]>) {
     queryKey: posQueryKeys.products(merchantId, activeStoreId),
     queryFn: () => fetchProducts(activeStoreId!),
     enabled: !!activeStoreId,
-    staleTime: 60_000,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    initialData: [] as any[],
     ...opts,
   });
 }
+
 export function useCustomersQuery(opts?: QOpts<any[]>) {
   const { merchantId } = useMerchant();
   return useQuery({
