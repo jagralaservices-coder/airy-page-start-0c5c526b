@@ -11,6 +11,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { MerchantProvider } from "@/contexts/MerchantContext";
 import { StoreProvider } from "@/contexts/StoreContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
+import { RealtimeProvider } from "@/contexts/RealtimeContext";
+import { POSDataProvider } from "@/contexts/POSDataContext";
 import { FeatureAccessProvider } from "@/contexts/FeatureAccessContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { LocaleProvider } from "@/contexts/LocaleContext";
