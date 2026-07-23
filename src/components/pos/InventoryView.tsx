@@ -1929,6 +1929,18 @@ const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setShowDialog(true);
   };
 
+  const updateLinkedProductStock = (item: MenuItem, nextStock: number | undefined) => {
+    const finalStock = nextStock === undefined || Number.isNaN(nextStock)
+      ? undefined
+      : Math.max(0, nextStock);
+    const updated = items.map(m => m.id === item.id ? { ...m, stock: finalStock } : m);
+    setMenuItems(updated);
+    setItems(updated);
+    const updatedItem = updated.find(m => m.id === item.id);
+    if (updatedItem) saveMenuItemsMutation.mutate([updatedItem]);
+    toast.success('Product stock updated');
+  };
+
   const handleSave = (ingredients: MenuItemIngredient[]) => {
     if (!selected) return;
     const all = getMenuItems();
@@ -2014,9 +2026,19 @@ const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     {count > 0 ? `${count} ingredient${count > 1 ? 's' : ''} linked` : 'No recipe set'}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-secondary/30 p-1.5 rounded-xl border border-border/50" onClick={e => e.stopPropagation()}>
-                    <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap pl-1">Product Stock:</span>
+                <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <div className="flex items-center gap-1.5 bg-secondary/30 p-1.5 rounded-xl border border-border/50" onClick={e => e.stopPropagation()}>
+                    <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap pl-1">Stock:</span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 flex-shrink-0"
+                      onClick={() => updateLinkedProductStock(item, (item.stock ?? 0) - 1)}
+                      disabled={(item.stock ?? 0) <= 0}
+                      title="Decrease stock"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </Button>
                     <Input
                       key={`stock-${item.id}-${item.stock ?? 'none'}`}
                       type="number"
@@ -2026,18 +2048,20 @@ const MenuRecipesView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         const val = e.target.value;
                         const parsed = val.trim() === '' ? undefined : parseFloat(val);
                         if (parsed !== item.stock) {
-                          const all = getMenuItems();
-                          const finalStock = isNaN(parsed as any) ? undefined : parsed;
-                          const updated = all.map(m => m.id === item.id ? { ...m, stock: finalStock } : m);
-                          setMenuItems(updated);
-                          setItems(updated);
-                          const updatedItem = updated.find(m => m.id === item.id);
-                          if (updatedItem) saveMenuItemsMutation.mutate([updatedItem]);
-                          toast.success('Product stock updated');
+                          updateLinkedProductStock(item, parsed);
                         }
                       }}
-                      className="w-24 h-10 text-lg font-bold text-center bg-background"
+                      className="w-20 h-9 text-base font-bold text-center bg-background"
                     />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-9 w-9 flex-shrink-0"
+                      onClick={() => updateLinkedProductStock(item, (item.stock ?? 0) + 1)}
+                      title="Increase stock"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
                   </div>
                   <Button 
                     variant={count > 0 ? "ghost" : "default"} 
