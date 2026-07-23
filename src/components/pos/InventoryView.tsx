@@ -922,6 +922,73 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
         />
       </div>
 
+      {/* Adjust Product Stock Dialog */}
+      <Dialog open={!!stockDialogItem} onOpenChange={(open) => { if (!open) setStockDialogItem(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adjust Stock</DialogTitle>
+          </DialogHeader>
+          {stockDialogItem && (
+            <div className="space-y-4 py-2">
+              <div>
+                <div className="font-medium">{stockDialogItem.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  Current: {stockDialogItem.stock !== undefined ? stockDialogItem.stock : '∞'}
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const cur = parseFloat(stockDialogValue) || 0;
+                    setStockDialogValue(String(Math.max(0, cur - 1)));
+                  }}
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <Input
+                  type="number"
+                  value={stockDialogValue}
+                  onChange={(e) => setStockDialogValue(e.target.value)}
+                  placeholder="∞ (unlimited)"
+                  className="w-32 text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const cur = parseFloat(stockDialogValue) || 0;
+                    setStockDialogValue(String(cur + 1));
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Leave empty for unlimited stock (∞)
+              </p>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setStockDialogItem(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    const val = stockDialogValue.trim();
+                    const parsed = val === '' ? undefined : parseFloat(val);
+                    updateProductStock(stockDialogItem, parsed);
+                    setStockDialogItem(null);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
