@@ -201,7 +201,8 @@ const AuthPage: React.FC = () => {
         const { data: sessionData } = await supabase.auth.getSession();
         const uid = sessionData.session?.user?.id;
         if (uid) {
-          const { data: roleRow } = await supabase
+          let role: string | undefined;
+          const { data: activeRole } = await supabase
             .from('user_roles')
             .select('role')
             .eq('user_id', uid)
@@ -209,7 +210,18 @@ const AuthPage: React.FC = () => {
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle();
-          const role = roleRow?.role;
+          role = activeRole?.role;
+          if (!role) {
+            // Fallback: ignore is_active flag (some legacy rows may have it null)
+            const { data: anyRole } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', uid)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            role = anyRole?.role;
+          }
           if (role) {
             setIsLoading(false);
             redirectByRole(role);
@@ -218,14 +230,16 @@ const AuthPage: React.FC = () => {
         }
       } catch (_) { /* fall through to state-driven redirect */ }
 
-      // Safety net: if state-driven redirect doesn't fire within 2.5s,
-      // force navigate to root so the app's own auth-aware routing takes over.
+      // Safety net: if state-driven redirect doesn't fire within 2s on mobile,
+      // force a hard reload so the app's own auth-aware routing takes over.
+      // React Router navigate() can no-op on mobile Chrome when context state
+      // is still hydrating after signInWithPassword.
       setTimeout(() => {
         setIsLoading(false);
         if (window.location.pathname === '/auth') {
-          navigate('/', { replace: true });
+          window.location.replace('/');
         }
-      }, 2500);
+      }, 2000);
     } catch (err) {
       setIsLoading(false);
       setLoginErrorMsg('Something went wrong');
