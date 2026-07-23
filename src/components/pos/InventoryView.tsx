@@ -56,6 +56,32 @@ import { useSubscription } from '@/hooks/useSubscription';
 
 import { useSaveCloudDataMutation, useDeleteCloudDataMutation } from '@/hooks/useCloudMutations';
 import { useInventoryQuery, useInventoryTransactionsQuery, useMenuItemsQuery } from '@/contexts/POSDataContext';
+import { getInventoryKind, setInventoryKind, removeInventoryKind, InventoryKind } from '@/lib/inventoryTypes';
+
+type InventorySection = 'product' | 'raw_material' | 'packaging';
+
+const SectionTabs: React.FC<{ value: InventorySection; onChange: (v: InventorySection) => void }> = ({ value, onChange }) => {
+  const tabs: { id: InventorySection; label: string }[] = [
+    { id: 'product', label: 'Product (Menu-linked)' },
+    { id: 'raw_material', label: 'Raw Material' },
+    { id: 'packaging', label: 'Packaging' },
+  ];
+  return (
+    <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4 w-fit">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`px-4 py-2 text-sm rounded-md transition-colors ${
+            value === t.id ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 type ViewType = 'main' | 'purchaseManagement' | 'requestForPurchase' | 'wastage' | 'addWastage' | 'convertRawMaterial' | 'currentStock' | 'openingClosing' | 'indentManagement' | 'productionExecution' | 'bulkUpload' | 'smartInventory' | 'inventoryHistory' | 'menuRecipes';
 
