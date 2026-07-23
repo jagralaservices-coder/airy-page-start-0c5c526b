@@ -881,17 +881,6 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
                             variant="ghost" 
                             size="sm" 
                             className="gap-1 text-xs"
-                            onClick={() => {
-                              if (onNavigate) onNavigate('menuRecipes');
-                            }}
-                          >
-                            <UtensilsCrossed className="w-3 h-3" />
-                            Inventory Linking
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="gap-1 text-xs"
                             onClick={() => openEditDialog(item)}
                           >
                             <Settings2 className="w-3 h-3" />
