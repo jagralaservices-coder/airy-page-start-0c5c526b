@@ -1384,12 +1384,15 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
   const { data: cloudInventory = [] } = useInventoryQuery();
   const { data: cloudMenuItems = [] } = useMenuItemsQuery();
 
-  const inventoryRows = useMemo(() => {
+  const [section, setSection] = useState<InventorySection>('product');
+
+  const rawRows = useMemo(() => {
     const source = cloudInventory.length > 0 ? cloudInventory : inventory;
     return source.map((item: any) => ({
       id: item.id,
       name: item.name,
-      type: 'Raw Material',
+      kind: getInventoryKind(item.id) as InventoryKind,
+      type: getInventoryKind(item.id) === 'packaging' ? 'Packaging' : 'Raw Material',
       quantity: Number(item.quantity ?? 0),
       unit: item.unit || 'pcs',
       costPerUnit: Number(item.costPerUnit ?? item.cost_per_unit ?? 0),
@@ -1403,6 +1406,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
       .map((item: MenuItem) => ({
         id: item.id,
         name: item.name,
+        kind: 'product' as const,
         type: 'Product Stock',
         quantity: Number(item.stock ?? 0),
         unit: 'pcs',
@@ -1413,10 +1417,13 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
 
   const stockRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return [...productRows, ...inventoryRows].filter((item) =>
+    const pool = section === 'product'
+      ? productRows
+      : rawRows.filter(r => r.kind === section);
+    return pool.filter((item) =>
       !q || item.name.toLowerCase().includes(q) || item.type.toLowerCase().includes(q),
     );
-  }, [inventoryRows, productRows, search]);
+  }, [rawRows, productRows, search, section]);
 
   return (
     <div className="min-h-screen bg-background">
