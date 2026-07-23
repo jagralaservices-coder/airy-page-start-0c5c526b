@@ -315,6 +315,7 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [stockDialogItem, setStockDialogItem] = useState<MenuItem | null>(null);
   const [stockDialogValue, setStockDialogValue] = useState<string>('');
+  const [recipeDialogItem, setRecipeDialogItem] = useState<MenuItem | null>(null);
   const { canAccess: canAccessFeature } = useSubscription();
   const hasRecipeAccess = canAccessFeature('recipeManagement');
   
