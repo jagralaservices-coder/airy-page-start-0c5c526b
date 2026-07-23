@@ -15,6 +15,7 @@ import {
   Printer,
   FileSpreadsheet,
   Plus,
+  Minus,
   ChevronDown,
   ChevronUp,
   X,
@@ -328,6 +329,17 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
   // Cloud sync mutations
   const saveInventoryMutation = useSaveCloudDataMutation('inventory');
   const deleteInventoryMutation = useDeleteCloudDataMutation('inventory');
+  const saveMenuItemsMutation = useSaveCloudDataMutation('menu_items');
+
+  const updateProductStock = (item: MenuItem, newStock: number | undefined) => {
+    const finalStock = newStock === undefined || isNaN(newStock as any) ? undefined : Math.max(0, newStock);
+    const all = getMenuItems();
+    const updated = all.map(m => m.id === item.id ? { ...m, stock: finalStock } : m);
+    setMenuItems(updated);
+    const updatedItem = updated.find(m => m.id === item.id);
+    if (updatedItem) saveMenuItemsMutation.mutate([updatedItem]);
+    toast.success(`${item.name} stock updated`);
+  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -719,7 +731,41 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
                       <td className="p-3 font-medium">{m.name}</td>
                       <td className="p-3 text-sm text-muted-foreground">{m.category || '—'}</td>
                       <td className="p-3">{formatCurrency(m.price)}</td>
-                      <td className="p-3 font-mono text-sm">{m.stock ?? '—'}</td>
+                      <td className="p-3 font-mono text-sm">
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => updateProductStock(m, (m.stock ?? 0) - 1)}
+                            disabled={(m.stock ?? 0) <= 0}
+                            title="Decrease stock"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </Button>
+                          <Input
+                            key={`prod-stock-${m.id}-${m.stock ?? 'none'}`}
+                            type="number"
+                            placeholder="∞"
+                            defaultValue={m.stock !== undefined ? m.stock : ''}
+                            onBlur={(e) => {
+                              const val = e.target.value;
+                              const parsed = val.trim() === '' ? undefined : parseFloat(val);
+                              if (parsed !== m.stock) updateProductStock(m, parsed);
+                            }}
+                            className="w-20 h-7 text-center px-1"
+                          />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => updateProductStock(m, (m.stock ?? 0) + 1)}
+                            title="Increase stock"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
                       <td className="p-3">
                         {m.ingredients && m.ingredients.length > 0 ? (
                           <span className="text-sm text-primary flex items-center gap-1">
