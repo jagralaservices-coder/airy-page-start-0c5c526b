@@ -78,11 +78,16 @@ export const MerchantProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       const { data, error: qErr } = await supabase
         .from('user_roles')
-        .select('merchant_id, customer_id, role, store_id')
-        .eq('user_id', user.id)
-        .eq('is_active', true);
+        .select('merchant_id, customer_id, role, store_id, is_active')
+        .eq('user_id', user.id);
       if (qErr) throw qErr;
-      const rows = (data || []).slice().sort((a: any, b: any) => {
+      const isStatusActive = (status: any) => {
+        if (status === true) return true;
+        if (status === false) return false;
+        if (status === null || status === undefined) return true;
+        return ['true', '1', 'active', 'enabled', 'approved'].includes(String(status).toLowerCase().trim());
+      };
+      const rows = (data || []).filter((row: any) => isStatusActive(row.is_active)).slice().sort((a: any, b: any) => {
         const am = a.merchant_id ? 0 : 1;
         const bm = b.merchant_id ? 0 : 1;
         if (am !== bm) return am - bm;
