@@ -329,6 +329,17 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
   // Cloud sync mutations
   const saveInventoryMutation = useSaveCloudDataMutation('inventory');
   const deleteInventoryMutation = useDeleteCloudDataMutation('inventory');
+  const saveMenuItemsMutation = useSaveCloudDataMutation('menu_items');
+
+  const updateProductStock = (item: MenuItem, newStock: number | undefined) => {
+    const finalStock = newStock === undefined || isNaN(newStock as any) ? undefined : Math.max(0, newStock);
+    const all = getMenuItems();
+    const updated = all.map(m => m.id === item.id ? { ...m, stock: finalStock } : m);
+    setMenuItems(updated);
+    const updatedItem = updated.find(m => m.id === item.id);
+    if (updatedItem) saveMenuItemsMutation.mutate([updatedItem]);
+    toast.success(`${item.name} stock updated`);
+  };
 
   const [formData, setFormData] = useState({
     name: '',
