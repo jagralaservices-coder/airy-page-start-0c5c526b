@@ -990,6 +990,23 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
         </DialogContent>
       </Dialog>
 
+      {/* Link/Edit Recipe Dialog */}
+      <MenuIngredientsDialog
+        open={!!recipeDialogItem}
+        onOpenChange={(open) => { if (!open) setRecipeDialogItem(null); }}
+        menuItem={recipeDialogItem}
+        onSave={(ingredients) => {
+          if (!recipeDialogItem) return;
+          const all = getMenuItems();
+          const updated = all.map(m => m.id === recipeDialogItem.id ? { ...m, ingredients } : m);
+          setMenuItems(updated);
+          const updatedItem = updated.find(m => m.id === recipeDialogItem.id);
+          if (updatedItem) saveMenuItemsMutation.mutate([updatedItem]);
+          setRecipeDialogItem(null);
+          toast.success('Recipe updated');
+        }}
+      />
+
 
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
