@@ -61,26 +61,41 @@ import { getInventoryKind, setInventoryKind, removeInventoryKind, InventoryKind 
 type InventorySection = 'product' | 'raw_material' | 'packaging';
 
 const SectionTabs: React.FC<{ value: InventorySection; onChange: (v: InventorySection) => void }> = ({ value, onChange }) => {
-  const tabs: { id: InventorySection; label: string }[] = [
-    { id: 'product', label: 'Product (Menu-linked)' },
-    { id: 'raw_material', label: 'Raw Material' },
-    { id: 'packaging', label: 'Packaging' },
+  const tabs: { id: InventorySection; label: string; shortLabel: string }[] = [
+    { id: 'product', label: 'Product (Menu-linked)', shortLabel: 'Product' },
+    { id: 'raw_material', label: 'Raw Material', shortLabel: 'Raw' },
+    { id: 'packaging', label: 'Packaging', shortLabel: 'Packaging' },
   ];
+
   return (
-    <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4 w-fit">
+    <div className="mb-5 grid grid-cols-3 gap-2 rounded-lg border border-border bg-card p-2 shadow-sm" role="tablist" aria-label="Inventory sections">
       {tabs.map(t => (
-        <button
+        <Button
           key={t.id}
+          type="button"
+          variant={value === t.id ? 'default' : 'outline'}
+          size="sm"
           onClick={() => onChange(t.id)}
-          className={`px-4 py-2 text-sm rounded-md transition-colors ${
-            value === t.id ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
-          }`}
+          className="h-auto min-h-10 whitespace-normal px-2 text-xs sm:text-sm"
+          role="tab"
+          aria-selected={value === t.id}
         >
-          {t.label}
-        </button>
+          <span className="hidden sm:inline">{t.label}</span>
+          <span className="sm:hidden">{t.shortLabel}</span>
+        </Button>
       ))}
     </div>
   );
+};
+
+const getSectionLabel = (section: InventorySection) => {
+  const labels: Record<InventorySection, string> = {
+    product: 'Product (Menu-linked)',
+    raw_material: 'Raw Material',
+    packaging: 'Packaging',
+  };
+
+  return labels[section];
 };
 
 type ViewType = 'main' | 'purchaseManagement' | 'requestForPurchase' | 'wastage' | 'addWastage' | 'convertRawMaterial' | 'currentStock' | 'openingClosing' | 'indentManagement' | 'productionExecution' | 'bulkUpload' | 'smartInventory' | 'inventoryHistory' | 'menuRecipes';
@@ -662,6 +677,9 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
         <SectionTabs value={section} onChange={(v) => { setSection(v); if (v !== 'product') setItemKind(v); }} />
+        <div className="mb-4 rounded-md border border-border bg-muted/40 px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">{getSectionLabel(section)}</h2>
+        </div>
         <div className="flex items-center gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -1440,6 +1458,9 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
         <SectionTabs value={section} onChange={setSection} />
+        <div className="mb-4 rounded-md border border-border bg-muted/40 px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">{getSectionLabel(section)}</h2>
+        </div>
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
