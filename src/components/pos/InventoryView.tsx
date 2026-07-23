@@ -734,37 +734,20 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
                       <td className="p-3 text-sm text-muted-foreground">{m.category || '—'}</td>
                       <td className="p-3">{formatCurrency(m.price)}</td>
                       <td className="p-3 font-mono text-sm">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-[3ch] text-right">
+                            {m.stock !== undefined ? m.stock : '∞'}
+                          </span>
                           <Button
                             variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateProductStock(m, (m.stock ?? 0) - 1)}
-                            disabled={(m.stock ?? 0) <= 0}
-                            title="Decrease stock"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </Button>
-                          <Input
-                            key={`prod-stock-${m.id}-${m.stock ?? 'none'}`}
-                            type="number"
-                            placeholder="∞"
-                            defaultValue={m.stock !== undefined ? m.stock : ''}
-                            onBlur={(e) => {
-                              const val = e.target.value;
-                              const parsed = val.trim() === '' ? undefined : parseFloat(val);
-                              if (parsed !== m.stock) updateProductStock(m, parsed);
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setStockDialogItem(m);
+                              setStockDialogValue(m.stock !== undefined ? String(m.stock) : '');
                             }}
-                            className="w-20 h-7 text-center px-1"
-                          />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateProductStock(m, (m.stock ?? 0) + 1)}
-                            title="Increase stock"
                           >
-                            <Plus className="w-3.5 h-3.5" />
+                            Adjust
                           </Button>
                         </div>
                       </td>
