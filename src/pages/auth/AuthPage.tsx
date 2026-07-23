@@ -193,34 +193,45 @@ const AuthPage: React.FC = () => {
       }
       setLoginSuccess(true);
 
-      // Mobile-safe fallback: don't wait for onAuthStateChange to hydrate
-      // isAuthenticated/userRole in context. Redirect immediately using a
-      // direct role lookup so slow/blocked storage on mobile browsers
-      // doesn't leave the user stuck on the login screen.
+      // Mobile/Android-safe fallback: don't wait for onAuthStateChange to hydrate
+      // isAuthenticated/userRole in context. Wrap role lookup in a hard timeout
+      // so a hung network/storage call on Android WebView can't leave the button
+      // stuck on "Processing...".
+      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+        Promise.race([
+          p,
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+        ]);
+
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const uid = sessionData.session?.user?.id;
+        const sessionRes = await withTimeout(supabase.auth.getSession(), 3000);
+        const uid = (sessionRes as any)?.data?.session?.user?.id;
         if (uid) {
           let role: string | undefined;
-          const { data: activeRole } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', uid)
-            .eq('is_active', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          role = activeRole?.role;
-          if (!role) {
-            // Fallback: ignore is_active flag (some legacy rows may have it null)
-            const { data: anyRole } = await supabase
+          const activeRes = await withTimeout(
+            supabase
               .from('user_roles')
               .select('role')
               .eq('user_id', uid)
+              .eq('is_active', true)
               .order('created_at', { ascending: false })
               .limit(1)
-              .maybeSingle();
-            role = anyRole?.role;
+              .maybeSingle(),
+            3000,
+          );
+          role = (activeRes as any)?.data?.role;
+          if (!role) {
+            const anyRes = await withTimeout(
+              supabase
+                .from('user_roles')
+                .select('role')
+                .eq('user_id', uid)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+              3000,
+            );
+            role = (anyRes as any)?.data?.role;
           }
           if (role) {
             setIsLoading(false);
@@ -230,16 +241,21 @@ const AuthPage: React.FC = () => {
         }
       } catch (_) { /* fall through to state-driven redirect */ }
 
-      // Safety net: if state-driven redirect doesn't fire within 2s on mobile,
-      // force a hard reload so the app's own auth-aware routing takes over.
-      // React Router navigate() can no-op on mobile Chrome when context state
-      // is still hydrating after signInWithPassword.
+      // Safety net: release the button and hand off to the app's auth-aware
+      // routing. Use navigate() first (works inside Capacitor Android WebView
+      // where window.location.replace can break the file:// origin), then a
+      // hard reload as last resort for plain mobile browsers.
+      setIsLoading(false);
       setTimeout(() => {
-        setIsLoading(false);
         if (window.location.pathname === '/auth') {
-          window.location.replace('/');
+          try { navigate('/', { replace: true }); } catch (_) {}
+          setTimeout(() => {
+            if (window.location.pathname === '/auth') {
+              try { window.location.href = '/'; } catch (_) {}
+            }
+          }, 800);
         }
-      }, 2000);
+      }, 1200);
     } catch (err) {
       setIsLoading(false);
       setLoginErrorMsg('Something went wrong');
