@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Store, Building, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
+import { useMerchant } from '@/contexts/MerchantContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +38,8 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
   onClose,
   onSelectStore,
 }) => {
-  const { userRole } = useSupabaseAuth();
+  const { userRole, user } = useSupabaseAuth();
+  const { merchantId } = useMerchant();
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
@@ -55,16 +57,32 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
   const fetchStores = useCallback(async () => {
     setLoading(true);
     try {
-      // Rely on RLS to scope stores to the current user (owner/admin/staff).
-      // Avoid client-side filtering that can miss stores when merchant_id vs
-      // customer_id vs owner_id linkage is inconsistent.
-      const { data, error } = await supabase
+      // Primary path: RLS-scoped query.
+      let { data, error } = await supabase
         .from('stores')
         .select('id, name, address, merchant_id, customer_id, owner_id, is_active')
         .eq('is_active', true)
         .order('name', { ascending: true });
 
-      console.log('[OwnerStoreSelectionDialog] fetch result:', { count: data?.length, error, userRole });
+      console.log('[OwnerStoreSelectionDialog] RLS fetch:', { count: data?.length, error, merchantId, userId: user?.id });
+
+      // Fallback: some legacy store rows aren't picked up by RLS on mobile
+      // (owner_id null, merchant_id/customer_id inconsistency). Retry with
+      // an explicit merchant/customer filter using the resolved merchantId
+      // or the auth user's id.
+      if (!error && (!data || data.length === 0)) {
+        const mid = merchantId || user?.id;
+        if (mid) {
+          const retry = await supabase
+            .from('stores')
+            .select('id, name, address, merchant_id, customer_id, owner_id, is_active')
+            .eq('is_active', true)
+            .or(`merchant_id.eq.${mid},customer_id.eq.${mid},owner_id.eq.${mid}`)
+            .order('name', { ascending: true });
+          console.log('[OwnerStoreSelectionDialog] fallback fetch:', { count: retry.data?.length, error: retry.error, mid });
+          if (!retry.error && retry.data) data = retry.data;
+        }
+      }
 
       if (error) {
         console.error('Error fetching stores:', error);
@@ -80,8 +98,7 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
         address: s.address,
       }));
       setStores(mapped);
-      
-      // Check if there's a previously selected store
+
       const savedStoreId = localStorage.getItem('owner_selected_store_id');
       if (savedStoreId && storeRows.some(s => s.id === savedStoreId)) {
         setSelectedStoreId(savedStoreId);
@@ -93,7 +110,7 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
     } finally {
       setLoading(false);
     }
-  }, [userRole]);
+  }, [userRole, merchantId, user?.id]);
 
   useEffect(() => {
     if (isOpen) {
