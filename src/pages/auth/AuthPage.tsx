@@ -197,9 +197,9 @@ const AuthPage: React.FC = () => {
       // isAuthenticated/userRole in context. Wrap role lookup in a hard timeout
       // so a hung network/storage call on Android WebView can't leave the button
       // stuck on "Processing...".
-      const withTimeout = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+      const withTimeout = <T,>(p: PromiseLike<T>, ms: number): Promise<T | null> =>
         Promise.race([
-          p,
+          Promise.resolve(p),
           new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
         ]);
 
