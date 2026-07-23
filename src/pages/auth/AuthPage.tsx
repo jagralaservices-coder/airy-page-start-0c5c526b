@@ -55,6 +55,12 @@ const AuthPage: React.FC = () => {
   const { toast } = useToast();
   const { sendOTP, verifyOTP, countdown, resetOTPState, isSent } = useOTP();
 
+  const withTimeout = <T,>(p: PromiseLike<T>, ms: number): Promise<T | null> =>
+    Promise.race([
+      Promise.resolve(p),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+    ]);
+
   const ownerSignupSchema = z.object({
     email: z.string().email(t('auth.validEmail')),
     password: z.string().min(6, t('auth.passwordMinLength')),
@@ -130,16 +136,24 @@ const AuthPage: React.FC = () => {
         // First try to resolve as Cashier ID / Username by constructing the dummy email
         const cashierEmail = `${trimmedEmail.toLowerCase()}@maxora.local`;
         const passToTry = /^\\d+$/.test(trimmedPassword) ? trimmedPassword + 'Aa@1' : trimmedPassword;
-        const { error: cashierError } = await login(cashierEmail, passToTry);
+        const cashierLoginResult = await withTimeout(login(cashierEmail, passToTry), 8000);
+        const cashierError = cashierLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
         
         if (!cashierError) {
           setLoginSuccess(true);
+          if (cashierLoginResult?.role) {
+            setIsLoading(false);
+            redirectByRole(cashierLoginResult.role);
+            return;
+          }
           // Same fallback check as below
           try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            const uid = sessionData.session?.user?.id;
+            const sessionDataRes = await withTimeout(supabase.auth.getSession(), 3000);
+            const sessionData = (sessionDataRes as any)?.data;
+            const uid = sessionData?.session?.user?.id;
             if (uid) {
-              const { data: roleRow } = await supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle();
+              const roleRes = await withTimeout(supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle(), 3000);
+              const roleRow = (roleRes as any)?.data;
               if (roleRow?.role) {
                 redirectByRole(roleRow.role);
                 return;
@@ -150,7 +164,7 @@ const AuthPage: React.FC = () => {
         }
 
         // If not a cashier (or wrong password), try store PIN login
-        const store = await loginStore(trimmedEmail, trimmedPassword);
+        const store = await withTimeout(loginStore(trimmedEmail, trimmedPassword), 8000);
         setIsLoading(false);
         if (!store) {
           // If store login also fails, show the error from the cashier attempt
@@ -167,14 +181,23 @@ const AuthPage: React.FC = () => {
         return;
       }
 
-      let { error } = await login(trimmedEmail, trimmedPassword);
+      let loginResult = await withTimeout(login(trimmedEmail, trimmedPassword), 8000);
+      let error = loginResult?.error ?? 'Login timed out. Please check your network and try again.';
       
       if (error && /^\d+$/.test(trimmedPassword)) {
         // Try falling back to Cashier PIN login pattern if they used an email and a numeric PIN
-        let pinError = (await login(trimmedEmail, trimmedPassword + '#MaxoraPOS!26@Auth')).error;
+        const pinLoginResult = await withTimeout(login(trimmedEmail, trimmedPassword + '#MaxoraPOS!26@Auth'), 8000);
+        let pinError = pinLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
+        if (!pinError) {
+          loginResult = pinLoginResult;
+        }
         if (pinError) {
           // Fallback to legacy suffix for older accounts
-          pinError = (await login(trimmedEmail, trimmedPassword + 'Aa@1')).error;
+          const legacyPinLoginResult = await withTimeout(login(trimmedEmail, trimmedPassword + 'Aa@1'), 8000);
+          pinError = legacyPinLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
+          if (!pinError) {
+            loginResult = legacyPinLoginResult;
+          }
         }
         if (!pinError) {
           error = null;
@@ -193,16 +216,16 @@ const AuthPage: React.FC = () => {
       }
       setLoginSuccess(true);
 
+      if (loginResult?.role) {
+        setIsLoading(false);
+        redirectByRole(loginResult.role);
+        return;
+      }
+
       // Mobile/Android-safe fallback: don't wait for onAuthStateChange to hydrate
       // isAuthenticated/userRole in context. Wrap role lookup in a hard timeout
       // so a hung network/storage call on Android WebView can't leave the button
       // stuck on "Processing...".
-      const withTimeout = <T,>(p: PromiseLike<T>, ms: number): Promise<T | null> =>
-        Promise.race([
-          Promise.resolve(p),
-          new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
-        ]);
-
       try {
         const sessionRes = await withTimeout(supabase.auth.getSession(), 3000);
         const uid = (sessionRes as any)?.data?.session?.user?.id;
