@@ -141,6 +141,11 @@ const AuthPage: React.FC = () => {
         
         if (!cashierError) {
           setLoginSuccess(true);
+          if (cashierLoginResult?.role) {
+            setIsLoading(false);
+            redirectByRole(cashierLoginResult.role);
+            return;
+          }
           // Same fallback check as below
           try {
             const sessionDataRes = await withTimeout(supabase.auth.getSession(), 3000);
@@ -176,15 +181,23 @@ const AuthPage: React.FC = () => {
         return;
       }
 
-      const loginResult = await withTimeout(login(trimmedEmail, trimmedPassword), 8000);
+      let loginResult = await withTimeout(login(trimmedEmail, trimmedPassword), 8000);
       let error = loginResult?.error ?? 'Login timed out. Please check your network and try again.';
       
       if (error && /^\d+$/.test(trimmedPassword)) {
         // Try falling back to Cashier PIN login pattern if they used an email and a numeric PIN
-        let pinError = (await withTimeout(login(trimmedEmail, trimmedPassword + '#MaxoraPOS!26@Auth'), 8000))?.error ?? 'Login timed out. Please check your network and try again.';
+        const pinLoginResult = await withTimeout(login(trimmedEmail, trimmedPassword + '#MaxoraPOS!26@Auth'), 8000);
+        let pinError = pinLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
+        if (!pinError) {
+          loginResult = pinLoginResult;
+        }
         if (pinError) {
           // Fallback to legacy suffix for older accounts
-          pinError = (await withTimeout(login(trimmedEmail, trimmedPassword + 'Aa@1'), 8000))?.error ?? 'Login timed out. Please check your network and try again.';
+          const legacyPinLoginResult = await withTimeout(login(trimmedEmail, trimmedPassword + 'Aa@1'), 8000);
+          pinError = legacyPinLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
+          if (!pinError) {
+            loginResult = legacyPinLoginResult;
+          }
         }
         if (!pinError) {
           error = null;
@@ -202,6 +215,12 @@ const AuthPage: React.FC = () => {
         return;
       }
       setLoginSuccess(true);
+
+      if (loginResult?.role) {
+        setIsLoading(false);
+        redirectByRole(loginResult.role);
+        return;
+      }
 
       // Mobile/Android-safe fallback: don't wait for onAuthStateChange to hydrate
       // isAuthenticated/userRole in context. Wrap role lookup in a hard timeout
