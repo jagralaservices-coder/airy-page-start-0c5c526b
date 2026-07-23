@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Store, Building, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
+import { useMerchant } from '@/contexts/MerchantContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
