@@ -38,7 +38,8 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
   onClose,
   onSelectStore,
 }) => {
-  const { userRole } = useSupabaseAuth();
+  const { userRole, user } = useSupabaseAuth();
+  const { merchantId } = useMerchant();
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
