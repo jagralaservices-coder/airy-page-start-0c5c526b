@@ -542,6 +542,7 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
     setInventory(updatedInventory);
     setLocalInventory(updatedInventory);
     deleteInventoryMutation.mutate([item.id]);
+    removeInventoryKind(item.id);
     
     // Track deletion for cloud sync
     try {
