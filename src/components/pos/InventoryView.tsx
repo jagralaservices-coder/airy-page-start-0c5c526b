@@ -743,14 +743,25 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
                         </div>
                       </td>
                       <td className="p-3">
-                        {m.ingredients && m.ingredients.length > 0 ? (
-                          <span className="text-sm text-primary flex items-center gap-1">
+                        <div className="flex items-center gap-2">
+                          {m.ingredients && m.ingredients.length > 0 ? (
+                            <span className="text-sm text-primary flex items-center gap-1">
+                              <Link className="w-3 h-3" />
+                              {m.ingredients.length} linked
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Not linked</span>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs gap-1"
+                            onClick={() => setRecipeDialogItem(m)}
+                          >
                             <Link className="w-3 h-3" />
-                            {m.ingredients.length} linked
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">Not linked</span>
-                        )}
+                            {m.ingredients && m.ingredients.length > 0 ? 'Edit Recipe' : 'Link Recipe'}
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}
