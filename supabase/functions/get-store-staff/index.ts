@@ -14,23 +14,35 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
     try {
       const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
       if (!error && user) {
-        const { data: roleData } = await supabaseAdmin
+        const { data: roles } = await supabaseAdmin
           .from('user_roles')
-          .select('role, store_id, customer_id')
+          .select('role, store_id, customer_id, merchant_id')
           .eq('user_id', user.id)
           .eq('is_active', true)
-          .in('role', ['admin', 'owner', 'store_manager', 'staff'])
-          .limit(1)
-          .maybeSingle()
-        
-        if (roleData) {
-          if (roleData.role === 'admin') return { authorized: true }
-          if (roleData.role === 'owner') {
-            const { data: store } = await supabaseAdmin
-              .from('stores').select('customer_id').eq('id', store_id).maybeSingle()
-            if (store && store.customer_id === roleData.customer_id) return { authorized: true }
+          .in('role', ['admin', 'super_admin', 'owner', 'store_manager', 'staff', 'cashier'])
+
+        if (roles && roles.length > 0) {
+          if (roles.some((r: any) => r.role === 'admin' || r.role === 'super_admin')) {
+            return { authorized: true }
           }
-          if ((roleData.role === 'store_manager' || roleData.role === 'staff') && roleData.store_id === store_id) {
+
+          const { data: store } = await supabaseAdmin
+            .from('stores')
+            .select('customer_id, merchant_id')
+            .eq('id', store_id)
+            .maybeSingle()
+
+          const ownerRoles = roles.filter((r: any) => r.role === 'owner')
+          if (store && ownerRoles.some((r: any) =>
+            (r.customer_id && r.customer_id === store.customer_id) ||
+            (r.merchant_id && r.merchant_id === store.merchant_id)
+          )) {
+            return { authorized: true }
+          }
+
+          if (roles.some((r: any) =>
+            ['store_manager', 'staff', 'cashier'].includes(r.role) && r.store_id === store_id
+          )) {
             return { authorized: true }
           }
         }
@@ -38,6 +50,7 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
       }
     } catch {}
   }
+
 
   if (store_code) {
     const { data: storeData } = await supabaseAdmin
