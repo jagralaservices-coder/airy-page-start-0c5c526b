@@ -13,6 +13,7 @@ import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { useMerchant } from '@/contexts/MerchantContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { getStores } from '@/lib/store';
 
 interface StoreItem {
   id: string;
@@ -26,6 +27,28 @@ interface StoreRow {
   name: string | null;
   address: string | null;
 }
+
+const mapStoreRows = (rows: StoreRow[]): StoreItem[] => rows.map((s) => ({
+  id: s.id,
+  store_name: s.name || 'Unnamed store',
+  store_code: String(s.id).slice(0, 8).toUpperCase(),
+  address: s.address,
+}));
+
+const getCachedStores = (): StoreItem[] => {
+  try {
+    return getStores()
+      .filter((s) => s?.id && s.isActive !== false)
+      .map((s) => ({
+        id: s.id,
+        store_name: s.name || 'Unnamed store',
+        store_code: s.storeCode || String(s.id).slice(0, 8).toUpperCase(),
+        address: s.address || null,
+      }));
+  } catch {
+    return [];
+  }
+};
 
 interface OwnerStoreSelectionDialogProps {
   isOpen: boolean;
@@ -57,6 +80,8 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
   const fetchStores = useCallback(async () => {
     setLoading(true);
     try {
+      const cachedStores = getCachedStores();
+
       // Primary path: RLS-scoped query.
       let { data, error } = await supabase
         .from('stores')
@@ -103,27 +128,39 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
 
       if (error && (!data || data.length === 0)) {
         console.error('Error fetching stores:', error);
+        if (cachedStores.length > 0) {
+          setStores(cachedStores);
+          const savedStoreId = localStorage.getItem('owner_selected_store_id') || localStorage.getItem('pos_active_store')?.replace(/^"|"$/g, '');
+          if (savedStoreId && cachedStores.some(s => s.id === savedStoreId)) {
+            setSelectedStoreId(savedStoreId);
+          }
+          return;
+        }
         toast.error(`Failed to load stores: ${error.message}`);
         return;
       }
 
       const storeRows = (data || []) as StoreRow[];
-      const mapped: StoreItem[] = storeRows.map((s) => ({
-        id: s.id,
-        store_name: s.name || 'Unnamed store',
-        store_code: String(s.id).slice(0, 8).toUpperCase(),
-        address: s.address,
-      }));
+      const mapped = storeRows.length > 0 ? mapStoreRows(storeRows) : cachedStores;
       setStores(mapped);
 
       const savedStoreId = localStorage.getItem('owner_selected_store_id');
-      if (savedStoreId && storeRows.some(s => s.id === savedStoreId)) {
+      if (savedStoreId && mapped.some(s => s.id === savedStoreId)) {
         setSelectedStoreId(savedStoreId);
       } else if (savedStoreId) {
         clearStaleStoreSelection();
       }
     } catch (error: any) {
       console.error('Error:', error);
+      const cachedStores = getCachedStores();
+      if (cachedStores.length > 0) {
+        setStores(cachedStores);
+        const savedStoreId = localStorage.getItem('owner_selected_store_id') || localStorage.getItem('pos_active_store')?.replace(/^"|"$/g, '');
+        if (savedStoreId && cachedStores.some(s => s.id === savedStoreId)) {
+          setSelectedStoreId(savedStoreId);
+        }
+        return;
+      }
       toast.error(`Failed to load stores: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
