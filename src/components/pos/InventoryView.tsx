@@ -578,8 +578,14 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
     setShowEditDialog(true);
   };
 
-  const filteredInventory = inventory.filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredInventory = inventory.filter(item => {
+    if (!item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (section === 'product') return false;
+    return getInventoryKind(item.id) === section;
+  });
+
+  const productItems = (cloudMenuItems || []).filter((m: MenuItem) =>
+    !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const openComponents = (item: InventoryItem) => {
