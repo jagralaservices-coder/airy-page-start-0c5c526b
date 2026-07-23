@@ -91,7 +91,7 @@ const SectionTabs: React.FC<{ value: InventorySection; onChange: (v: InventorySe
 const getSectionLabel = (section: InventorySection) => {
   const labels: Record<InventorySection, string> = {
     product: 'Product (Menu-linked)',
-    { id: 'raw_material', label: 'Raw Material' },
+    raw_material: 'Raw Material',
     packaging: 'Packaging',
   };
 
