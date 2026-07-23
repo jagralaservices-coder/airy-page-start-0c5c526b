@@ -153,7 +153,7 @@ const AuthPage: React.FC = () => {
 
         // First try to resolve as Cashier ID / Username by constructing the dummy email
         const cashierEmail = `${trimmedEmail.toLowerCase()}@maxora.local`;
-        const passToTry = /^\\d+$/.test(trimmedPassword) ? trimmedPassword + 'Aa@1' : trimmedPassword;
+        const passToTry = /^\d+$/.test(trimmedPassword) ? trimmedPassword + 'Aa@1' : trimmedPassword;
         const cashierLoginResult = await withTimeout(login(cashierEmail, passToTry), 8000);
         const cashierError = cashierLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
         
