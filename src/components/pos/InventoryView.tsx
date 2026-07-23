@@ -323,6 +323,8 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
   const [showComponentsDialog, setShowComponentsDialog] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  const [stockDialogItem, setStockDialogItem] = useState<MenuItem | null>(null);
+  const [stockDialogValue, setStockDialogValue] = useState<string>('');
   const { canAccess: canAccessFeature } = useSubscription();
   const hasRecipeAccess = canAccessFeature('recipeManagement');
   
@@ -732,37 +734,20 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
                       <td className="p-3 text-sm text-muted-foreground">{m.category || '—'}</td>
                       <td className="p-3">{formatCurrency(m.price)}</td>
                       <td className="p-3 font-mono text-sm">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-[3ch] text-right">
+                            {m.stock !== undefined ? m.stock : '∞'}
+                          </span>
                           <Button
                             variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateProductStock(m, (m.stock ?? 0) - 1)}
-                            disabled={(m.stock ?? 0) <= 0}
-                            title="Decrease stock"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </Button>
-                          <Input
-                            key={`prod-stock-${m.id}-${m.stock ?? 'none'}`}
-                            type="number"
-                            placeholder="∞"
-                            defaultValue={m.stock !== undefined ? m.stock : ''}
-                            onBlur={(e) => {
-                              const val = e.target.value;
-                              const parsed = val.trim() === '' ? undefined : parseFloat(val);
-                              if (parsed !== m.stock) updateProductStock(m, parsed);
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => {
+                              setStockDialogItem(m);
+                              setStockDialogValue(m.stock !== undefined ? String(m.stock) : '');
                             }}
-                            className="w-20 h-7 text-center px-1"
-                          />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateProductStock(m, (m.stock ?? 0) + 1)}
-                            title="Increase stock"
                           >
-                            <Plus className="w-3.5 h-3.5" />
+                            Adjust
                           </Button>
                         </div>
                       </td>
@@ -936,6 +921,73 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
           onSave={refreshInventory}
         />
       </div>
+
+      {/* Adjust Product Stock Dialog */}
+      <Dialog open={!!stockDialogItem} onOpenChange={(open) => { if (!open) setStockDialogItem(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adjust Stock</DialogTitle>
+          </DialogHeader>
+          {stockDialogItem && (
+            <div className="space-y-4 py-2">
+              <div>
+                <div className="font-medium">{stockDialogItem.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  Current: {stockDialogItem.stock !== undefined ? stockDialogItem.stock : '∞'}
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const cur = parseFloat(stockDialogValue) || 0;
+                    setStockDialogValue(String(Math.max(0, cur - 1)));
+                  }}
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+                <Input
+                  type="number"
+                  value={stockDialogValue}
+                  onChange={(e) => setStockDialogValue(e.target.value)}
+                  placeholder="∞ (unlimited)"
+                  className="w-32 text-center"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => {
+                    const cur = parseFloat(stockDialogValue) || 0;
+                    setStockDialogValue(String(cur + 1));
+                  }}
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Leave empty for unlimited stock (∞)
+              </p>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setStockDialogItem(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    const val = stockDialogValue.trim();
+                    const parsed = val === '' ? undefined : parseFloat(val);
+                    updateProductStock(stockDialogItem, parsed);
+                    setStockDialogItem(null);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
 
       {/* Add Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
