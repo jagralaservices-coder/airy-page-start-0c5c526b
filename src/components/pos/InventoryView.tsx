@@ -15,6 +15,7 @@ import {
   Printer,
   FileSpreadsheet,
   Plus,
+  Minus,
   ChevronDown,
   ChevronUp,
   X,
