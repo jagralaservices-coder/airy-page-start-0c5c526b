@@ -259,9 +259,6 @@ export const InventoryView: React.FC = () => {
   if (activeView === 'inventoryHistory') {
     return <InventoryHistoryView onBack={() => setActiveView('main')} inventory={inventory} />;
   }
-  if (activeView === 'menuRecipes') {
-    return <MenuRecipesView onBack={() => setActiveView('main')} />;
-  }
 
   return (
     <div className="min-h-screen bg-background">
