@@ -135,13 +135,6 @@ export const InventoryView: React.FC = () => {
         color: 'bg-red-50 text-red-600'
       },
       {
-        id: 'menuRecipes',
-        icon: UtensilsCrossed,
-        title: 'Inventory Linking',
-        description: 'Link inventory ingredients to your menu items so stock auto-deducts on every sale.',
-        color: 'bg-blue-50 text-blue-600'
-      },
-      {
         id: 'requestForPurchase',
         icon: FileText,
         title: 'Request For Purchase',
