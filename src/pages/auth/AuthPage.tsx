@@ -112,6 +112,8 @@ const AuthPage: React.FC = () => {
     }
   };
 
+  const isStoreIdentifier = (value: string) => /^[0-9A-F]{8}$/i.test(value.trim()) || /^STR[0-9]{5}$/i.test(value.trim());
+
   useEffect(() => {
     if (!loginSuccess || !isAuthenticated) return;
     if (userRole) {
@@ -133,6 +135,22 @@ const AuthPage: React.FC = () => {
     setIsLoading(true);
     try {
       if (!trimmedEmail.includes('@')) {
+        // Store ID/code login must take priority over cashier username login.
+        // Android WebView was trying `<storeId>@maxora.local` first, which could
+        // show cashier-login errors or delay the real store login path.
+        if (isStoreIdentifier(trimmedEmail)) {
+          const store = await withTimeout(loginStore(trimmedEmail, trimmedPassword), 8000);
+          setIsLoading(false);
+          if (!store) {
+            setLoginErrorMsg('Invalid Store ID or Password.');
+            toast({ title: t('auth.loginFailed'), description: 'Invalid store credentials', variant: 'destructive' });
+            return;
+          }
+          toast({ title: 'Login successful', description: `Welcome ${store.name}` });
+          navigate('/pos', { replace: true });
+          return;
+        }
+
         // First try to resolve as Cashier ID / Username by constructing the dummy email
         const cashierEmail = `${trimmedEmail.toLowerCase()}@maxora.local`;
         const passToTry = /^\\d+$/.test(trimmedPassword) ? trimmedPassword + 'Aa@1' : trimmedPassword;
