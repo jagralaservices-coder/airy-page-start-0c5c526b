@@ -44,7 +44,7 @@ interface AuthContextType {
   store: StoreData | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ error: string | null }>;
+  login: (email: string, password: string) => Promise<{ error: string | null; role?: UserRole }>;
   signup: (email: string, password: string, fullName: string) => Promise<{ error: string | null, data?: any }>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
@@ -186,7 +186,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
       const isStatusActive = (status: any) => {
         if (status === true) return true;
         if (status === false) return false;
-        if (status === null || status === undefined) return false;
+        if (status === null || status === undefined) return true;
         const str = String(status).toLowerCase().trim();
         return ['true', '1', 'active', 'enabled', 'approved'].includes(str);
       };
@@ -642,7 +642,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
     }));
   };
 
-  const login = async (email: string, password: string): Promise<{ error: string | null }> => {
+  const login = async (email: string, password: string): Promise<{ error: string | null; role?: UserRole }> => {
     try {
       const normalizedEmail = email.trim().toLowerCase();
       const normalizedPassword = password.trim();
@@ -702,7 +702,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       logSecurityAction('LOGIN', 'profiles', authData.user.id);
       localStorage.setItem('pos_session_active', 'true');
-      return { error: null };
+      return { error: null, role: roleRecord.role };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An unexpected error occurred';
       return { error: message || 'An unexpected error occurred' };
