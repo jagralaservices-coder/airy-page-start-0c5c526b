@@ -19,7 +19,7 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
           .select('role, store_id, customer_id, merchant_id')
           .eq('user_id', user.id)
           .eq('is_active', true)
-          .in('role', ['admin', 'super_admin', 'owner', 'store_manager', 'staff', 'cashier'])
+          .in('role', ['admin', 'super_admin', 'owner', 'merchant', 'store_manager', 'staff', 'cashier'])
 
         if (roles && roles.length > 0) {
           if (roles.some((r: any) => r.role === 'admin' || r.role === 'super_admin')) {
@@ -28,14 +28,17 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
 
           const { data: store } = await supabaseAdmin
             .from('stores')
-            .select('customer_id, merchant_id')
+            .select('customer_id, merchant_id, created_by')
             .eq('id', store_id)
             .maybeSingle()
 
-          const ownerRoles = roles.filter((r: any) => r.role === 'owner')
+          const ownerRoles = roles.filter((r: any) => r.role === 'owner' || r.role === 'merchant')
           if (store && ownerRoles.some((r: any) =>
             (r.customer_id && r.customer_id === store.customer_id) ||
-            (r.merchant_id && r.merchant_id === store.merchant_id)
+            (r.merchant_id && r.merchant_id === store.merchant_id) ||
+            (store.customer_id && store.customer_id === user.id) ||
+            (store.merchant_id && store.merchant_id === user.id) ||
+            (store.created_by && store.created_by === user.id)
           )) {
             return { authorized: true }
           }
