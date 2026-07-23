@@ -1439,6 +1439,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
         </div>
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <SectionTabs value={section} onChange={setSection} />
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
