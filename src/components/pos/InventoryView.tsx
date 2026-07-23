@@ -677,6 +677,9 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
         <SectionTabs value={section} onChange={(v) => { setSection(v); if (v !== 'product') setItemKind(v); }} />
+        <div className="mb-4 rounded-md border border-border bg-muted/40 px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">{getSectionLabel(section)}</h2>
+        </div>
         <div className="flex items-center gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -1455,6 +1458,9 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
         <SectionTabs value={section} onChange={setSection} />
+        <div className="mb-4 rounded-md border border-border bg-muted/40 px-4 py-3">
+          <h2 className="text-base font-semibold text-foreground">{getSectionLabel(section)}</h2>
+        </div>
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
