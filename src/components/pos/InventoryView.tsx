@@ -881,6 +881,16 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
+              <Label>Item Type</Label>
+              <Select value={itemKind} onValueChange={(v) => setItemKind(v as InventoryKind)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="raw_material">Raw Material</SelectItem>
+                  <SelectItem value="packaging">Packaging</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label>Item Name *</Label>
               <Input 
                 placeholder="Enter item name"
