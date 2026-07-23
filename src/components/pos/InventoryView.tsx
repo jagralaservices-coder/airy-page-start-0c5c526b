@@ -56,6 +56,32 @@ import { useSubscription } from '@/hooks/useSubscription';
 
 import { useSaveCloudDataMutation, useDeleteCloudDataMutation } from '@/hooks/useCloudMutations';
 import { useInventoryQuery, useInventoryTransactionsQuery, useMenuItemsQuery } from '@/contexts/POSDataContext';
+import { getInventoryKind, setInventoryKind, removeInventoryKind, InventoryKind } from '@/lib/inventoryTypes';
+
+type InventorySection = 'product' | 'raw_material' | 'packaging';
+
+const SectionTabs: React.FC<{ value: InventorySection; onChange: (v: InventorySection) => void }> = ({ value, onChange }) => {
+  const tabs: { id: InventorySection; label: string }[] = [
+    { id: 'product', label: 'Product (Menu-linked)' },
+    { id: 'raw_material', label: 'Raw Material' },
+    { id: 'packaging', label: 'Packaging' },
+  ];
+  return (
+    <div className="flex gap-1 p-1 bg-muted rounded-lg mb-4 w-fit">
+      {tabs.map(t => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={`px-4 py-2 text-sm rounded-md transition-colors ${
+            value === t.id ? 'bg-background shadow-sm font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 type ViewType = 'main' | 'purchaseManagement' | 'requestForPurchase' | 'wastage' | 'addWastage' | 'convertRawMaterial' | 'currentStock' | 'openingClosing' | 'indentManagement' | 'productionExecution' | 'bulkUpload' | 'smartInventory' | 'inventoryHistory' | 'menuRecipes';
 
@@ -298,6 +324,10 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
     isManufactured: false
   });
 
+  const [section, setSection] = useState<InventorySection>('product');
+  const [itemKind, setItemKind] = useState<InventoryKind>('raw_material');
+  const { data: cloudMenuItems = [] } = useMenuItemsQuery();
+
   const handleAddPurchase = () => {
     if (!formData.name) {
       toast.error('Item name is required');
@@ -344,8 +374,9 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
       const updatedInventory = [newItem, ...inventory];
       setInventory(updatedInventory);
       setLocalInventory(updatedInventory);
+      setInventoryKind(newItem.id, itemKind);
       saveInventoryMutation.mutate([newItem]);
-      toast.success(`New item "${formData.name}" added to inventory`);
+      toast.success(`New ${itemKind === 'packaging' ? 'packaging' : 'raw material'} "${formData.name}" added`);
     }
 
     const costPerUnit = formData.costPerUnit ? parseFloat(formData.costPerUnit) : 0;
@@ -511,6 +542,7 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
     setInventory(updatedInventory);
     setLocalInventory(updatedInventory);
     deleteInventoryMutation.mutate([item.id]);
+    removeInventoryKind(item.id);
     
     // Track deletion for cloud sync
     try {
@@ -547,8 +579,14 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
     setShowEditDialog(true);
   };
 
-  const filteredInventory = inventory.filter(item => 
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredInventory = inventory.filter(item => {
+    if (!item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (section === 'product') return false;
+    return getInventoryKind(item.id) === section;
+  });
+
+  const productItems = (cloudMenuItems || []).filter((m: MenuItem) =>
+    !searchQuery || m.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const openComponents = (item: InventoryItem) => {
@@ -623,24 +661,65 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
         </div>
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <SectionTabs value={section} onChange={(v) => { setSection(v); if (v !== 'product') setItemKind(v); }} />
         <div className="flex items-center gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
-              placeholder="Search inventory..." 
+              placeholder={section === 'product' ? 'Search products…' : 'Search inventory...'}
               className="pl-10" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button className="gap-2 bg-primary text-primary-foreground" onClick={() => setShowAddDialog(true)}>
-            <Plus className="w-4 h-4" />
-            Add Purchase
-          </Button>
+          {section !== 'product' && (
+            <Button className="gap-2 bg-primary text-primary-foreground" onClick={() => { setItemKind(section); setShowAddDialog(true); }}>
+              <Plus className="w-4 h-4" />
+              Add {section === 'packaging' ? 'Packaging' : 'Raw Material'}
+            </Button>
+          )}
         </div>
 
-        {filteredInventory.length === 0 ? (
-          <EmptyState message="There is no purchase record available." />
+        {section === 'product' ? (
+          productItems.length === 0 ? (
+            <EmptyState message="No menu products found. Add items in Menu to see them here." />
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 text-sm font-medium">Product Name</th>
+                    <th className="text-left p-3 text-sm font-medium">Category</th>
+                    <th className="text-left p-3 text-sm font-medium">Price</th>
+                    <th className="text-left p-3 text-sm font-medium">Stock</th>
+                    <th className="text-left p-3 text-sm font-medium">Recipe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productItems.map((m: MenuItem) => (
+                    <tr key={m.id} className="border-t border-border">
+                      <td className="p-3 font-medium">{m.name}</td>
+                      <td className="p-3 text-sm text-muted-foreground">{m.category || '—'}</td>
+                      <td className="p-3">{formatCurrency(m.price)}</td>
+                      <td className="p-3 font-mono text-sm">{m.stock ?? '—'}</td>
+                      <td className="p-3">
+                        {m.ingredients && m.ingredients.length > 0 ? (
+                          <span className="text-sm text-primary flex items-center gap-1">
+                            <Link className="w-3 h-3" />
+                            {m.ingredients.length} linked
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Not linked</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : filteredInventory.length === 0 ? (
+          <EmptyState message={`No ${section === 'packaging' ? 'packaging' : 'raw material'} items yet.`} />
         ) : (
           <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
             <table className="w-full">
@@ -785,6 +864,7 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
           </div>
         )}
 
+
         <InventoryComponentsDialog
           open={showComponentsDialog}
           onOpenChange={setShowComponentsDialog}
@@ -800,6 +880,16 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
             <DialogTitle>Add Purchase</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div>
+              <Label>Item Type</Label>
+              <Select value={itemKind} onValueChange={(v) => setItemKind(v as InventoryKind)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="raw_material">Raw Material</SelectItem>
+                  <SelectItem value="packaging">Packaging</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label>Item Name *</Label>
               <Input 
@@ -1294,12 +1384,15 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
   const { data: cloudInventory = [] } = useInventoryQuery();
   const { data: cloudMenuItems = [] } = useMenuItemsQuery();
 
-  const inventoryRows = useMemo(() => {
+  const [section, setSection] = useState<InventorySection>('product');
+
+  const rawRows = useMemo(() => {
     const source = cloudInventory.length > 0 ? cloudInventory : inventory;
     return source.map((item: any) => ({
       id: item.id,
       name: item.name,
-      type: 'Raw Material',
+      kind: getInventoryKind(item.id) as InventoryKind,
+      type: getInventoryKind(item.id) === 'packaging' ? 'Packaging' : 'Raw Material',
       quantity: Number(item.quantity ?? 0),
       unit: item.unit || 'pcs',
       costPerUnit: Number(item.costPerUnit ?? item.cost_per_unit ?? 0),
@@ -1313,6 +1406,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
       .map((item: MenuItem) => ({
         id: item.id,
         name: item.name,
+        kind: 'product' as const,
         type: 'Product Stock',
         quantity: Number(item.stock ?? 0),
         unit: 'pcs',
@@ -1323,10 +1417,13 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
 
   const stockRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return [...productRows, ...inventoryRows].filter((item) =>
+    const pool = section === 'product'
+      ? productRows
+      : rawRows.filter(r => r.kind === section);
+    return pool.filter((item) =>
       !q || item.name.toLowerCase().includes(q) || item.type.toLowerCase().includes(q),
     );
-  }, [inventoryRows, productRows, search]);
+  }, [rawRows, productRows, search, section]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -1342,6 +1439,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
         </div>
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <SectionTabs value={section} onChange={setSection} />
         <div className="flex items-center justify-between gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
