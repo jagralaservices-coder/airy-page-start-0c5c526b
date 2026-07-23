@@ -660,24 +660,65 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
         </div>
       </div>
       <div className="max-w-5xl mx-auto p-4 md:p-6">
+        <SectionTabs value={section} onChange={(v) => { setSection(v); if (v !== 'product') setItemKind(v); }} />
         <div className="flex items-center gap-4 mb-6">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
-              placeholder="Search inventory..." 
+              placeholder={section === 'product' ? 'Search products…' : 'Search inventory...'}
               className="pl-10" 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button className="gap-2 bg-primary text-primary-foreground" onClick={() => setShowAddDialog(true)}>
-            <Plus className="w-4 h-4" />
-            Add Purchase
-          </Button>
+          {section !== 'product' && (
+            <Button className="gap-2 bg-primary text-primary-foreground" onClick={() => { setItemKind(section); setShowAddDialog(true); }}>
+              <Plus className="w-4 h-4" />
+              Add {section === 'packaging' ? 'Packaging' : 'Raw Material'}
+            </Button>
+          )}
         </div>
 
-        {filteredInventory.length === 0 ? (
-          <EmptyState message="There is no purchase record available." />
+        {section === 'product' ? (
+          productItems.length === 0 ? (
+            <EmptyState message="No menu products found. Add items in Menu to see them here." />
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 text-sm font-medium">Product Name</th>
+                    <th className="text-left p-3 text-sm font-medium">Category</th>
+                    <th className="text-left p-3 text-sm font-medium">Price</th>
+                    <th className="text-left p-3 text-sm font-medium">Stock</th>
+                    <th className="text-left p-3 text-sm font-medium">Recipe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productItems.map((m: MenuItem) => (
+                    <tr key={m.id} className="border-t border-border">
+                      <td className="p-3 font-medium">{m.name}</td>
+                      <td className="p-3 text-sm text-muted-foreground">{m.category || '—'}</td>
+                      <td className="p-3">{formatCurrency(m.price)}</td>
+                      <td className="p-3 font-mono text-sm">{m.stock ?? '—'}</td>
+                      <td className="p-3">
+                        {m.ingredients && m.ingredients.length > 0 ? (
+                          <span className="text-sm text-primary flex items-center gap-1">
+                            <Link className="w-3 h-3" />
+                            {m.ingredients.length} linked
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Not linked</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : filteredInventory.length === 0 ? (
+          <EmptyState message={`No ${section === 'packaging' ? 'packaging' : 'raw material'} items yet.`} />
         ) : (
           <div className="border border-border rounded-lg overflow-hidden overflow-x-auto">
             <table className="w-full">
@@ -821,6 +862,7 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
             </table>
           </div>
         )}
+
 
         <InventoryComponentsDialog
           open={showComponentsDialog}
