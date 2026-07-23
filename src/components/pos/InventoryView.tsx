@@ -374,8 +374,9 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
       const updatedInventory = [newItem, ...inventory];
       setInventory(updatedInventory);
       setLocalInventory(updatedInventory);
+      setInventoryKind(newItem.id, itemKind);
       saveInventoryMutation.mutate([newItem]);
-      toast.success(`New item "${formData.name}" added to inventory`);
+      toast.success(`New ${itemKind === 'packaging' ? 'packaging' : 'raw material'} "${formData.name}" added`);
     }
 
     const costPerUnit = formData.costPerUnit ? parseFloat(formData.costPerUnit) : 0;
