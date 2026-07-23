@@ -145,7 +145,7 @@ const AuthPage: React.FC = () => {
           try {
             const sessionDataRes = await withTimeout(supabase.auth.getSession(), 3000);
             const sessionData = (sessionDataRes as any)?.data;
-            const uid = sessionData.session?.user?.id;
+            const uid = sessionData?.session?.user?.id;
             if (uid) {
               const roleRes = await withTimeout(supabase.from('user_roles').select('role').eq('user_id', uid).maybeSingle(), 3000);
               const roleRow = (roleRes as any)?.data;
@@ -159,7 +159,7 @@ const AuthPage: React.FC = () => {
         }
 
         // If not a cashier (or wrong password), try store PIN login
-        const store = await loginStore(trimmedEmail, trimmedPassword);
+        const store = await withTimeout(loginStore(trimmedEmail, trimmedPassword), 8000);
         setIsLoading(false);
         if (!store) {
           // If store login also fails, show the error from the cashier attempt
