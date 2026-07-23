@@ -324,6 +324,10 @@ const PurchaseManagementView: React.FC<{ onBack: () => void, onNavigate?: (view:
     isManufactured: false
   });
 
+  const [section, setSection] = useState<InventorySection>('product');
+  const [itemKind, setItemKind] = useState<InventoryKind>('raw_material');
+  const { data: cloudMenuItems = [] } = useMenuItemsQuery();
+
   const handleAddPurchase = () => {
     if (!formData.name) {
       toast.error('Item name is required');
