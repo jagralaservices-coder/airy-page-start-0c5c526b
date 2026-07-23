@@ -64,13 +64,10 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
         .eq('is_active', true)
         .order('name', { ascending: true });
 
-      console.log('[OwnerStoreSelectionDialog] RLS fetch:', { count: data?.length, error, merchantId, userId: user?.id });
+      console.log('[OwnerStoreSelectionDialog] RLS fetch:', { count: data?.length, error: error?.message, merchantId, userId: user?.id });
 
-      // Fallback: some legacy store rows aren't picked up by RLS on mobile
-      // (owner_id null, merchant_id/customer_id inconsistency). Retry with
-      // an explicit merchant/customer filter using the resolved merchantId
-      // or the auth user's id.
-      if (!error && (!data || data.length === 0)) {
+      // Fallback: explicit ID filter (runs on error OR empty result)
+      if (error || !data || data.length === 0) {
         const mid = merchantId || user?.id;
         if (mid) {
           const retry = await supabase
@@ -79,12 +76,32 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
             .eq('is_active', true)
             .or(`merchant_id.eq.${mid},customer_id.eq.${mid},owner_id.eq.${mid}`)
             .order('name', { ascending: true });
-          console.log('[OwnerStoreSelectionDialog] fallback fetch:', { count: retry.data?.length, error: retry.error, mid });
-          if (!retry.error && retry.data) data = retry.data;
+          console.log('[OwnerStoreSelectionDialog] fallback fetch:', { count: retry.data?.length, error: retry.error?.message, mid });
+          if (!retry.error && retry.data && retry.data.length > 0) {
+            data = retry.data;
+            error = null;
+          }
         }
       }
 
-      if (error) {
+      // Last resort: try without is_active filter (legacy rows may have null)
+      if ((!data || data.length === 0)) {
+        const mid = merchantId || user?.id;
+        if (mid) {
+          const retry2 = await supabase
+            .from('stores')
+            .select('id, name, address, merchant_id, customer_id, owner_id, is_active')
+            .or(`merchant_id.eq.${mid},customer_id.eq.${mid},owner_id.eq.${mid}`)
+            .order('name', { ascending: true });
+          console.log('[OwnerStoreSelectionDialog] last-resort fetch:', { count: retry2.data?.length, error: retry2.error?.message });
+          if (!retry2.error && retry2.data && retry2.data.length > 0) {
+            data = retry2.data;
+            error = null;
+          }
+        }
+      }
+
+      if (error && (!data || data.length === 0)) {
         console.error('Error fetching stores:', error);
         toast.error(`Failed to load stores: ${error.message}`);
         return;
@@ -105,12 +122,14 @@ export const OwnerStoreSelectionDialog: React.FC<OwnerStoreSelectionDialogProps>
       } else if (savedStoreId) {
         clearStaleStoreSelection();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
+      toast.error(`Failed to load stores: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   }, [userRole, merchantId, user?.id]);
+
 
   useEffect(() => {
     if (isOpen) {
