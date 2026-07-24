@@ -246,6 +246,8 @@ export interface Order {
   deliveryBoy?: string;
   onlineSource?: 'swiggy' | 'zomato' | 'direct';
   storeId?: string;
+  cashierId?: string;
+  cashierName?: string;
   cancelReason?: string; // Reason for cancellation
   cancelledAt?: string; // ISO timestamp when cancelled
   pendingSync?: boolean;
