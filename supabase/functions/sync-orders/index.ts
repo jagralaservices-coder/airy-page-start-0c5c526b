@@ -83,17 +83,8 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
     return { authorized: false, error: 'Invalid store credentials' }
   }
 
-  // Path 3: Fallback - verify store_id is valid and active
-  const { data: activeStore } = await supabaseAdmin
-    .from('stores')
-    .select('id')
-    .eq('id', store_id)
-    .eq('is_active', true)
-    .maybeSingle()
-  
-  if (activeStore) return { authorized: true }
-
   return { authorized: false, error: 'Authentication required' }
+
 }
 
 serve(async (req) => {

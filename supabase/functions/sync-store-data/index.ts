@@ -79,16 +79,8 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
     return { authorized: false, error: 'Invalid store credentials' }
   }
 
-  // Path 3: Fallback - verify store_id is valid and active (for store-login sessions without store_code)
-  const { data: activeStore } = await supabaseAdmin
-    .from('stores')
-    .select('id, is_active')
-    .eq('id', store_id)
-    .maybeSingle()
-  
-  if (activeStore && isActiveStatus(activeStore.is_active)) return { authorized: true }
-
   return { authorized: false, error: 'Authentication required' }
+
 }
 
 serve(async (req) => {
@@ -933,7 +925,8 @@ serve(async (req) => {
     if (data_type === 'whatsapp_config') {
       if (action === 'fetch') {
         const { data, error } = await supabaseAdmin
-          .from('store_whatsapp_config').select('*').eq('store_id', store_id).maybeSingle()
+          .from('store_whatsapp_config').select('store_id, owner_id, whatsapp_number, instance_id, is_verified, created_at, updated_at').eq('store_id', store_id).maybeSingle()
+
         if (error) throw error
         return new Response(JSON.stringify({ success: true, config: data || null }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -955,12 +948,14 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         }
         const { data, error } = await supabaseAdmin
-          .from('store_whatsapp_config').upsert(dbConfig, { onConflict: 'store_id' }).select().maybeSingle()
+          .from('store_whatsapp_config').upsert(dbConfig, { onConflict: 'store_id' })
+          .select('store_id, owner_id, whatsapp_number, instance_id, is_verified, created_at, updated_at').maybeSingle()
         if (error) throw error
         return new Response(JSON.stringify({ success: true, config: data || null }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
     }
+
 
     // ===== AUDIT LOG =====
     if (data_type === 'audit_log') {
