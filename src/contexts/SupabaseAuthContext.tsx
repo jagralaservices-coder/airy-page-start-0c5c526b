@@ -679,7 +679,50 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         return { error: 'Login failed. Please try again.' };
       }
 
-      const roleRecord = await fetchUserData(authData.user.id, authData.user);
+      if (authData.session) {
+        setSession(authData.session);
+        setUser(authData.user);
+        try {
+          localStorage.setItem('pos_session_backup', JSON.stringify(authData.session));
+          localStorage.setItem('pos_user_backup', JSON.stringify(authData.user));
+          localStorage.setItem('pos_session_active', 'true');
+        } catch (cacheError) {
+          console.warn('[Auth] Failed to cache login session immediately:', cacheError);
+        }
+      }
+
+      const { data: roleRows, error: roleError } = await supabase
+        .from('user_roles')
+        .select('id, user_id, role, customer_id, merchant_id, store_id, staff_code, ref_code, pin, is_active, created_at')
+        .eq('user_id', authData.user.id);
+
+      if (roleError) {
+        throw roleError;
+      }
+
+      const isStatusActive = (status: any) => {
+        if (status === true) return true;
+        if (status === false) return false;
+        if (status === null || status === undefined) return true;
+        const str = String(status).toLowerCase().trim();
+        return ['true', '1', 'active', 'enabled', 'approved'].includes(str);
+      };
+
+      const rolePriority: Record<string, number> = {
+        super_admin: 0,
+        admin: 1,
+        owner: 2,
+        store_manager: 3,
+        staff: 4,
+        cashier: 9,
+      };
+
+      const activeRows = (roleRows || []).filter((r: any) => isStatusActive(r.is_active));
+      const roleData = activeRows
+        .slice()
+        .sort((a: any, b: any) => (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99))[0];
+
+      const roleRecord = roleData as unknown as UserRoleData | undefined;
 
       if (!roleRecord) {
         await supabase.auth.signOut();
@@ -689,7 +732,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         return { error: 'No active account found for this email. Please contact admin.' };
       }
 
-      if (!roleRecord.is_active) {
+      if (!isStatusActive(roleRecord.is_active)) {
         await supabase.auth.signOut();
         return { error: 'Your account has been suspended. Please contact the administrator.' };
       }
@@ -699,6 +742,13 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         clearRoleState();
         return { error: 'This account is not linked to any store.' };
       }
+
+      setUserRole(roleRecord);
+      localStorage.setItem('pos_user_role_backup', JSON.stringify(roleRecord));
+
+      void fetchUserData(authData.user.id, authData.user).catch((hydrateError) => {
+        console.warn('[Auth] Background login hydration failed:', hydrateError);
+      });
 
       logSecurityAction('LOGIN', 'profiles', authData.user.id);
       localStorage.setItem('pos_session_active', 'true');

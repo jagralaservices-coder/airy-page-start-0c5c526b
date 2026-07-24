@@ -199,20 +199,20 @@ const AuthPage: React.FC = () => {
         return;
       }
 
-      let loginResult = await withTimeout(login(trimmedEmail, trimmedPassword), 8000);
-      let error = loginResult?.error ?? 'Login timed out. Please check your network and try again.';
+      let loginResult = await login(trimmedEmail, trimmedPassword);
+      let error = loginResult.error;
       
       if (error && /^\d+$/.test(trimmedPassword)) {
         // Try falling back to Cashier PIN login pattern if they used an email and a numeric PIN
-        const pinLoginResult = await withTimeout(login(trimmedEmail, trimmedPassword + '#MaxoraPOS!26@Auth'), 8000);
-        let pinError = pinLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
+        const pinLoginResult = await login(trimmedEmail, trimmedPassword + '#MaxoraPOS!26@Auth');
+        let pinError = pinLoginResult.error;
         if (!pinError) {
           loginResult = pinLoginResult;
         }
         if (pinError) {
           // Fallback to legacy suffix for older accounts
-          const legacyPinLoginResult = await withTimeout(login(trimmedEmail, trimmedPassword + 'Aa@1'), 8000);
-          pinError = legacyPinLoginResult?.error ?? 'Login timed out. Please check your network and try again.';
+          const legacyPinLoginResult = await login(trimmedEmail, trimmedPassword + 'Aa@1');
+          pinError = legacyPinLoginResult.error;
           if (!pinError) {
             loginResult = legacyPinLoginResult;
           }
