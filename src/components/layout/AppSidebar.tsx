@@ -19,6 +19,7 @@ import {
   Check,
   Sparkles,
   Users,
+  ClipboardList,
 } from 'lucide-react';
 import { useSupabaseAuth, UserRole } from '@/contexts/SupabaseAuthContext';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
