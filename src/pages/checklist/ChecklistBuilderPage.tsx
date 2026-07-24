@@ -162,6 +162,7 @@ const ChecklistBuilderPage: React.FC = () => {
         description: checklist.description ?? '',
         department: dept ?? '',
         category: checklist.category ?? '',
+        shift_time: checklist.shift_time ?? null,
         frequency: checklist.frequency ?? 'daily',
         is_active: !!checklist.is_active,
       }).eq('id', id);
