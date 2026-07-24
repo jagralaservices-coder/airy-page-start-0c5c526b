@@ -1,0 +1,1 @@
+ALTER TABLE public.checklists ADD COLUMN IF NOT EXISTS shift_time text;
