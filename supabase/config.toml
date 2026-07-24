@@ -50,8 +50,6 @@ verify_jwt = false
 
 [functions.create-store]
 verify_jwt = false
-[functions.export-auth-users]
-verify_jwt = false
 
 [functions.admin-subscription-manage]
 verify_jwt = false
