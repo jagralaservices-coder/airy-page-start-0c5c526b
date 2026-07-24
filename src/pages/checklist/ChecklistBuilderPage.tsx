@@ -270,23 +270,43 @@ const ChecklistBuilderPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground">Shift</label>
+            <label className="text-xs text-muted-foreground">Shift Type</label>
             <select
               className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm"
-              value={checklist.category ?? ''}
-              onChange={e => setChecklist({ ...checklist, category: e.target.value, shift_time: e.target.value ? (checklist.shift_time ?? '') : null })}
+              value={checklist.shift_type ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                const clearTimes = !SHIFTS_WITH_TIME.includes(v);
+                setChecklist({
+                  ...checklist,
+                  shift_type: v,
+                  category: v,
+                  shift_start_time: clearTimes ? null : (checklist.shift_start_time ?? ''),
+                  shift_end_time: clearTimes ? null : (checklist.shift_end_time ?? ''),
+                });
+              }}
             >
-              <option value="">No shift</option>
-              {SHIFTS.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="">Select shift type…</option>
+              {SHIFT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {!!checklist.category && SHIFTS.includes(checklist.category) && (
-              <div className="mt-2">
-                <label className="text-xs text-muted-foreground">Shift Time</label>
-                <Input
-                  type="time"
-                  value={checklist.shift_time ?? ''}
-                  onChange={e => setChecklist({ ...checklist, shift_time: e.target.value })}
-                />
+            {SHIFTS_WITH_TIME.includes(checklist.shift_type ?? '') && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Start Time *</label>
+                  <Input
+                    type="time"
+                    value={checklist.shift_start_time ?? ''}
+                    onChange={e => setChecklist({ ...checklist, shift_start_time: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">End Time *</label>
+                  <Input
+                    type="time"
+                    value={checklist.shift_end_time ?? ''}
+                    onChange={e => setChecklist({ ...checklist, shift_end_time: e.target.value })}
+                  />
+                </div>
               </div>
             )}
           </div>
