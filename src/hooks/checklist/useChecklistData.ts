@@ -143,22 +143,6 @@ export function useSubmissions(filter?: { staffOnly?: boolean; status?: Submissi
   });
 }
 
-export function useUniformReferences() {
-  const { merchantId } = useMerchant();
-  return useQuery({
-    queryKey: ['uniform_refs', merchantId],
-    enabled: !!merchantId,
-    queryFn: async () => {
-      const { data, error } = await table('uniform_reference_images')
-        .select('*')
-        .eq('merchant_id', merchantId!)
-        .eq('is_current', true)
-        .order('kind');
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-}
 
 export function useNotifications() {
   const { user } = useSupabaseAuth();

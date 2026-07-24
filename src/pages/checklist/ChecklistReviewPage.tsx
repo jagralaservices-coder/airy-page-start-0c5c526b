@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { useSubmissions, useUniformReferences, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
+import { useSubmissions, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
 import { useMerchant } from '@/contexts/MerchantContext';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemResultPanel';
@@ -14,42 +14,85 @@ import { CheckCircle2, XCircle, Eye } from 'lucide-react';
 
 const table = (n: string) => supabase.from(n as any);
 
+interface SubmissionImage { id: string; storage_path: string; item_id: string | null; }
+interface ItemInfo { id: string; title: string; input_type: string; ai_verify: boolean; }
+interface RefImage { item_id: string; storage_path: string; }
+
 const ChecklistReviewPage: React.FC = () => {
   const { merchantId } = useMerchant();
   const { user } = useSupabaseAuth();
   const qc = useQueryClient();
   const { data: submissions = [], isLoading } = useSubmissions();
-  const { data: refs = [] } = useUniformReferences();
 
+  // Per-submission: map of item_id -> signed URLs
+  const [submittedByItem, setSubmittedByItem] = useState<Record<string, Record<string, string[]>>>({});
+  const [referenceByItem, setReferenceByItem] = useState<Record<string, Record<string, string[]>>>({});
+  const [itemsByChecklist, setItemsByChecklist] = useState<Record<string, ItemInfo[]>>({});
+  const [answersBySub, setAnswersBySub] = useState<Record<string, Record<string, any>>>({});
   const [compare, setCompare] = useState<{ ref: string[]; sub: string[] } | null>(null);
-  const [images, setImages] = useState<Record<string, string[]>>({});
-  const [refUrls, setRefUrls] = useState<string[]>([]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'ai_fail' | 'approved' | 'rejected'>('all');
 
   useEffect(() => {
     (async () => {
-      const urls: string[] = [];
-      for (const r of refs as any[]) {
-        const { data } = await supabase.storage.from('uniform-reference').createSignedUrl(r.storage_path, 3600);
-        if (data?.signedUrl) urls.push(data.signedUrl);
-      }
-      setRefUrls(urls);
-    })();
-  }, [refs]);
+      const subImgMap: Record<string, Record<string, string[]>> = {};
+      const refImgMap: Record<string, Record<string, string[]>> = {};
+      const itemsMap: Record<string, ItemInfo[]> = {};
+      const answersMap: Record<string, Record<string, any>> = {};
 
-  useEffect(() => {
-    (async () => {
-      const map: Record<string, string[]> = {};
       for (const s of submissions as any[]) {
-        const { data: imgs } = await table('submission_images').select('storage_path').eq('submission_id', s.id);
-        const arr: string[] = [];
-        for (const im of imgs ?? []) {
+        // Submitted images grouped by item
+        const { data: imgs } = await table('submission_images')
+          .select('id, storage_path, item_id')
+          .eq('submission_id', s.id);
+        const byItem: Record<string, string[]> = {};
+        for (const im of (imgs ?? []) as SubmissionImage[]) {
           const { data } = await supabase.storage.from('staff-checklist').createSignedUrl(im.storage_path, 3600);
-          if (data?.signedUrl) arr.push(data.signedUrl);
+          if (data?.signedUrl && im.item_id) {
+            (byItem[im.item_id] = byItem[im.item_id] || []).push(data.signedUrl);
+          }
         }
-        map[s.id] = arr;
+        subImgMap[s.id] = byItem;
+
+        // Checklist items for this submission
+        if (s.checklist_id && !itemsMap[s.checklist_id]) {
+          const { data: items } = await table('checklist_items')
+            .select('id, title, input_type, ai_verify')
+            .eq('checklist_id', s.checklist_id)
+            .order('order_index', { ascending: true });
+          itemsMap[s.checklist_id] = (items ?? []) as ItemInfo[];
+
+          // Per-item reference images (owner uploaded, dynamic)
+          const itemIds = (items ?? []).map((i: any) => i.id);
+          if (itemIds.length) {
+            const { data: refs } = await table('checklist_item_reference_images')
+              .select('item_id, storage_path')
+              .in('item_id', itemIds);
+            const byRefItem: Record<string, string[]> = {};
+            for (const r of (refs ?? []) as RefImage[]) {
+              const { data } = await supabase.storage.from('uniform-reference').createSignedUrl(r.storage_path, 3600);
+              if (data?.signedUrl) {
+                (byRefItem[r.item_id] = byRefItem[r.item_id] || []).push(data.signedUrl);
+              }
+            }
+            refImgMap[s.checklist_id] = byRefItem;
+          }
+        }
+
+        // Tick / text / number answers
+        const { data: ans } = await table('submission_answers')
+          .select('item_id, answer_json')
+          .eq('submission_id', s.id);
+        const byAns: Record<string, any> = {};
+        for (const a of (ans ?? []) as any[]) {
+          if (a.item_id) byAns[a.item_id] = a.answer_json;
+        }
+        answersMap[s.id] = byAns;
       }
-      setImages(map);
+
+      setSubmittedByItem(subImgMap);
+      setReferenceByItem(refImgMap);
+      setItemsByChecklist(itemsMap);
+      setAnswersBySub(answersMap);
     })();
   }, [submissions]);
 
@@ -84,15 +127,27 @@ const ChecklistReviewPage: React.FC = () => {
        filtered.length === 0 ? <Card className="rounded-2xl bg-card/60 backdrop-blur"><CardContent className="p-10 text-center text-muted-foreground">No submissions.</CardContent></Card> :
        <div className="grid md:grid-cols-2 gap-4">
         {filtered.map((s: any) => {
-          const itemResults: AiItemResult[] = (s.ai_item_verification_results ?? []).map((r: any) => ({
-            item_id: r.item_id,
-            title: r.item_title ?? 'Item',
-            status: r.status,
-            confidence: r.confidence ?? null,
-            reason: r.reason,
-            detected_problems: r.detected_problems,
-            suggestions: r.suggestions,
-          }));
+          const items = itemsByChecklist[s.checklist_id] ?? [];
+          const aiResultsRaw = (s.ai_item_verification_results ?? []) as any[];
+          // Only render AI panel for items that actually had AI verify enabled AND produced a result.
+          const aiItems: AiItemResult[] = aiResultsRaw
+            .filter(r => items.some(it => it.id === r.item_id && it.ai_verify))
+            .map(r => {
+              const it = items.find(i => i.id === r.item_id);
+              return {
+                item_id: r.item_id,
+                title: it?.title ?? 'Item',
+                status: r.status,
+                confidence: r.confidence ?? null,
+                reason: r.reason,
+                detected_problems: r.detected_problems,
+                suggestions: r.suggestions,
+              };
+            });
+          const subImgs = submittedByItem[s.id] ?? {};
+          const refImgs = referenceByItem[s.checklist_id] ?? {};
+          const answers = answersBySub[s.id] ?? {};
+
           return (
             <Card key={s.id} className="rounded-2xl bg-card/60 backdrop-blur">
               <CardHeader>
@@ -105,16 +160,61 @@ const ChecklistReviewPage: React.FC = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                {images[s.id]?.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {images[s.id].slice(0, 6).map((u, i) => (
-                      <img key={i} src={u} alt="sub" className="aspect-square object-cover rounded-lg border border-border" />
-                    ))}
+                {items.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No items defined.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {items.map(it => {
+                      const type = it.input_type;
+                      const isTick = type === 'tick' || type === 'tick_image';
+                      const isImage = type === 'image' || type === 'tick_image';
+                      const isText = type === 'text';
+                      const isNumber = type === 'number';
+                      const ans = answers[it.id];
+                      const imgs = subImgs[it.id] ?? [];
+                      const refs = refImgs[it.id] ?? [];
+                      return (
+                        <div key={it.id} className="rounded-lg border border-border/60 p-2 space-y-2">
+                          <div className="text-sm font-medium flex items-center justify-between gap-2">
+                            <span>{it.title}</span>
+                            {isTick && (
+                              <Badge variant={ans?.value ? 'default' : 'secondary'} className="text-[10px]">
+                                {ans?.value ? 'Done' : 'Not done'}
+                              </Badge>
+                            )}
+                          </div>
+                          {(isText || isNumber) && (
+                            <p className="text-xs text-muted-foreground">
+                              {ans?.value !== undefined && ans?.value !== null && ans?.value !== '' ? String(ans.value) : '—'}
+                            </p>
+                          )}
+                          {isImage && (
+                            <>
+                              {imgs.length > 0 ? (
+                                <div className="grid grid-cols-3 gap-2">
+                                  {imgs.slice(0, 6).map((u, i) => (
+                                    <img key={i} src={u} alt="submitted" className="aspect-square object-cover rounded-md border border-border" />
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No image submitted.</p>
+                              )}
+                              {refs.length > 0 && (
+                                <Button size="sm" variant="outline" onClick={() => setCompare({ ref: refs, sub: imgs })}>
+                                  <Eye className="h-3.5 w-3.5 mr-1" /> Compare with reference
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
-                <AiItemResultPanel items={itemResults} />
+
+                {aiItems.length > 0 && <AiItemResultPanel items={aiItems} />}
+
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setCompare({ ref: refUrls, sub: images[s.id] ?? [] })}><Eye className="h-4 w-4 mr-1" /> Compare</Button>
                   <Button size="sm" onClick={() => review(s, 'approved')} disabled={s.status === 'approved'}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve</Button>
                   <Button size="sm" variant="destructive" onClick={() => review(s, 'rejected', prompt('Reason?') ?? '')} disabled={s.status === 'rejected'}><XCircle className="h-4 w-4 mr-1" /> Reject</Button>
                 </div>

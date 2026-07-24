@@ -181,7 +181,7 @@ const FixedAssetsPage = lazy(() => import("./pages/accounting/FixedAssetsPage"))
 const DepreciationPage = lazy(() => import("./pages/accounting/DepreciationPage"));
 const ChecklistLibraryPage = lazy(() => import("./pages/checklist/ChecklistLibraryPage"));
 const ChecklistBuilderPage = lazy(() => import("./pages/checklist/ChecklistBuilderPage"));
-const UniformReferencePage = lazy(() => import("./pages/checklist/UniformReferencePage"));
+
 const ChecklistReviewPage = lazy(() => import("./pages/checklist/ChecklistReviewPage"));
 const ChecklistReportsPage = lazy(() => import("./pages/checklist/ChecklistReportsPage"));
 const ChecklistAuditPage = lazy(() => import("./pages/checklist/ChecklistAuditPage"));
@@ -590,9 +590,6 @@ const AppRoutes = () => {
       } />
       <Route path="/checklists" element={
         <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistLibraryPage /></ProtectedRoute>
-      } />
-      <Route path="/checklists/uniform" element={
-        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><UniformReferencePage /></ProtectedRoute>
       } />
       <Route path="/checklists/review" element={
         <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistReviewPage /></ProtectedRoute>

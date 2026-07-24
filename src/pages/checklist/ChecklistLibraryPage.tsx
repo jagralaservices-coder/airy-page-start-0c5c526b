@@ -99,7 +99,7 @@ const ChecklistLibraryPage: React.FC = () => {
             <ClipboardList className="h-7 w-7" /> Staff Checklists
           </h1>
           <p className="text-sm text-muted-foreground">
-            Create AI-verified checklists for grooming, cleaning and operations.
+            Build fully dynamic checklists. AI verification only runs on the items you configure.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -111,7 +111,6 @@ const ChecklistLibraryPage: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-3 flex-wrap">
-        <Link to="/checklists/uniform"><Button variant="outline"><Sparkles className="h-4 w-4 mr-1" /> Uniform reference</Button></Link>
         <Link to="/checklists/review"><Button variant="outline">Review submissions</Button></Link>
         <Link to="/checklists/reports"><Button variant="outline">Reports</Button></Link>
         <Link to="/checklists/audit"><Button variant="outline">Audit log</Button></Link>

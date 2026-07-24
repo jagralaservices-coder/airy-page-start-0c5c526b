@@ -14,7 +14,7 @@ import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemRe
 
 const table = (n: string) => supabase.from(n as any);
 
-type InputType = 'tick' | 'image' | 'tick_image';
+type InputType = 'tick' | 'image' | 'tick_image' | 'text' | 'number';
 
 const ChecklistSubmitPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +26,8 @@ const ChecklistSubmitPage: React.FC = () => {
 
   const [ticks, setTicks] = useState<Record<string, boolean>>({});
   const [images, setImages] = useState<Record<string, Blob[]>>({});
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<AiItemResult[] | null>(null);
@@ -52,6 +54,12 @@ const ChecklistSubmitPage: React.FC = () => {
       if (type === 'image' || type === 'tick_image') {
         if (!(images[it.id]?.length)) { toast.error(`Please capture image: ${it.title}`); return false; }
       }
+      if (type === 'text') {
+        if (!texts[it.id]?.trim()) { toast.error(`Please answer: ${it.title}`); return false; }
+      }
+      if (type === 'number') {
+        if (numbers[it.id] === undefined || numbers[it.id] === '') { toast.error(`Please enter a number: ${it.title}`); return false; }
+      }
     }
     return true;
   };
@@ -71,7 +79,7 @@ const ChecklistSubmitPage: React.FC = () => {
 
       await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: sub.id, action: 'submitted' });
 
-      // per-item ticks and images
+      // per-item ticks, text, number and images
       for (const it of items as any[]) {
         const type: InputType = (it.input_type ?? 'tick') as InputType;
         if (type === 'tick' || type === 'tick_image') {
@@ -80,6 +88,16 @@ const ChecklistSubmitPage: React.FC = () => {
               submission_id: sub.id, item_id: it.id, answer_json: { value: !!ticks[it.id] },
             });
           }
+        }
+        if (type === 'text' && texts[it.id] !== undefined) {
+          await table('submission_answers').insert({
+            submission_id: sub.id, item_id: it.id, answer_json: { value: texts[it.id] ?? '' },
+          });
+        }
+        if (type === 'number' && numbers[it.id] !== undefined && numbers[it.id] !== '') {
+          await table('submission_answers').insert({
+            submission_id: sub.id, item_id: it.id, answer_json: { value: Number(numbers[it.id]) },
+          });
         }
         const bs = images[it.id] ?? [];
         for (let i = 0; i < bs.length; i++) {
@@ -102,8 +120,12 @@ const ChecklistSubmitPage: React.FC = () => {
         })));
       }
 
-      const hasImages = (items as any[]).some(it => (it.input_type === 'image' || it.input_type === 'tick_image'));
-      if (hasImages) {
+      // Only run AI when at least one item has BOTH an image response type AND ai_verify=true.
+      // Otherwise the checklist has no AI component and we save responses only.
+      const aiItems = (items as any[]).filter(it =>
+        (it.input_type === 'image' || it.input_type === 'tick_image') && it.ai_verify === true
+      );
+      if (aiItems.length > 0) {
         toast.info('Running AI verification…');
         const { data: verifyRes, error: vErr } = await supabase.functions.invoke('verify-checklist-submission', {
           body: { submission_id: sub.id },
@@ -117,7 +139,7 @@ const ChecklistSubmitPage: React.FC = () => {
       } else {
         setResults([]);
         setSubmissionStatus('pending');
-        toast.success('Submitted. No image items to verify.');
+        toast.success('Submitted.');
       }
     } catch (e: any) {
       toast.error(e.message ?? 'Submission failed');
@@ -135,7 +157,7 @@ const ChecklistSubmitPage: React.FC = () => {
             Status: <span className="font-semibold text-foreground capitalize">{submissionStatus.replace('_', ' ')}</span>
           </div>
         )}
-        <AiItemResultPanel items={results} />
+        {results.length > 0 && <AiItemResultPanel items={results} />}
         <Button className="w-full" onClick={() => nav('/staff/checklists')}>Done</Button>
       </div>
     );
@@ -152,6 +174,14 @@ const ChecklistSubmitPage: React.FC = () => {
         const type: InputType = (it.input_type ?? 'tick') as InputType;
         const needsTick = type === 'tick' || type === 'tick_image';
         const needsImage = type === 'image' || type === 'tick_image';
+        const needsText = type === 'text';
+        const needsNumber = type === 'number';
+        const typeLabel =
+          type === 'tick' ? 'Tick only' :
+          type === 'image' ? 'Image only' :
+          type === 'tick_image' ? 'Tick + Image' :
+          type === 'text' ? 'Text answer' :
+          type === 'number' ? 'Number answer' : type;
         return (
           <Card key={it.id} className="rounded-2xl bg-card/60 backdrop-blur">
             <CardHeader>
@@ -159,9 +189,7 @@ const ChecklistSubmitPage: React.FC = () => {
                 {it.title}{it.required && <span className="text-red-500 ml-1">*</span>}
               </CardTitle>
               {it.description && <p className="text-xs text-muted-foreground">{it.description}</p>}
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {type === 'tick' ? 'Tick only' : type === 'image' ? 'Image only' : 'Tick + Image'}
-              </p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{typeLabel}</p>
             </CardHeader>
             <CardContent className="space-y-3">
               {needsTick && (
@@ -188,6 +216,23 @@ const ChecklistSubmitPage: React.FC = () => {
                   <LiveCameraCapture facing="environment" label="Capture photo" onCapture={(b) => addImg(it.id, b)} />
                   <div className="text-xs text-muted-foreground">{(images[it.id]?.length ?? 0)} photo(s)</div>
                 </>
+              )}
+              {needsText && (
+                <textarea
+                  value={texts[it.id] ?? ''}
+                  onChange={(e) => setTexts(t => ({ ...t, [it.id]: e.target.value }))}
+                  placeholder="Type your answer…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm min-h-[80px]"
+                />
+              )}
+              {needsNumber && (
+                <input
+                  type="number"
+                  value={numbers[it.id] ?? ''}
+                  onChange={(e) => setNumbers(n => ({ ...n, [it.id]: e.target.value }))}
+                  placeholder="Enter a number"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
               )}
             </CardContent>
           </Card>
