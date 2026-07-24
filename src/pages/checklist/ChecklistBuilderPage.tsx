@@ -21,9 +21,14 @@ const INPUT_OPTIONS: { value: InputType; label: string; hint: string }[] = [
   { value: 'number', label: 'Number', hint: 'Numeric reading' },
 ];
 
-const CATEGORIES = ['Opening', 'Mid Shift', 'Closing', 'Daily', 'Weekly', 'Monthly', 'Custom'];
+const SHIFTS = ['Opening', 'Mid Shift', 'Closing'] as const;
+const SCHEDULES = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'custom', label: 'Custom' },
+];
 const DEPARTMENTS = ['Kitchen', 'Service', 'Cash Counter', 'Housekeeping', 'Delivery', 'Store', 'Custom'];
-const FREQUENCIES = ['daily', 'weekly', 'monthly', 'before_shift', 'after_shift', 'custom', 'once'];
 
 interface ItemDraft {
   _new?: boolean;
