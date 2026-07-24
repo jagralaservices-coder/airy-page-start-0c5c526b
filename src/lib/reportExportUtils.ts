@@ -39,19 +39,27 @@ export const exportToPrintableHTML = (
   title: string,
   metadata?: { storeName?: string; dateRange?: string; generatedAt?: string }
 ) => {
-  const headerRow = columns.map(c => `<th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-size:12px;text-align:left;">${c.header}</th>`).join('');
+  const escHtml = (s: unknown) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
+  const headerRow = columns.map(c => `<th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;font-size:12px;text-align:left;">${escHtml(c.header)}</th>`).join('');
   const bodyRows = data.map(row =>
     `<tr>${columns.map(col => {
       const value = row[col.key];
       const formatted = col.format ? col.format(value) : (value ?? '');
-      return `<td style="border:1px solid #ddd;padding:6px;font-size:11px;">${formatted}</td>`;
+      return `<td style="border:1px solid #ddd;padding:6px;font-size:11px;">${escHtml(formatted)}</td>`;
     }).join('')}</tr>`
   ).join('');
 
   const html = `
     <!DOCTYPE html>
     <html>
-    <head><title>${title}</title>
+    <head><title>${escHtml(title)}</title>
     <style>
       @media print { body { margin: 0; } @page { margin: 1cm; } }
       body { font-family: Arial, sans-serif; padding: 20px; }
@@ -64,10 +72,10 @@ export const exportToPrintableHTML = (
     </head>
     <body>
       <div class="header">
-        <h1>${title}</h1>
-        ${metadata?.storeName ? `<div class="meta">Store: ${metadata.storeName}</div>` : ''}
-        ${metadata?.dateRange ? `<div class="meta">Period: ${metadata.dateRange}</div>` : ''}
-        <div class="meta">Generated: ${metadata?.generatedAt || new Date().toLocaleString()}</div>
+        <h1>${escHtml(title)}</h1>
+        ${metadata?.storeName ? `<div class="meta">Store: ${escHtml(metadata.storeName)}</div>` : ''}
+        ${metadata?.dateRange ? `<div class="meta">Period: ${escHtml(metadata.dateRange)}</div>` : ''}
+        <div class="meta">Generated: ${escHtml(metadata?.generatedAt || new Date().toLocaleString())}</div>
         <div class="summary">Total Records: ${data.length}</div>
       </div>
       <table>
@@ -77,6 +85,7 @@ export const exportToPrintableHTML = (
     </body>
     </html>
   `;
+
 
   const printWindow = window.open('', '_blank');
   if (printWindow) {

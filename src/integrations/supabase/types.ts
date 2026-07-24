@@ -7004,6 +7004,10 @@ export type Database = {
           supplier_name: string
         }[]
       }
+      can_access_staff_face: {
+        Args: { _object_name: string }
+        Returns: boolean
+      }
       can_manage_store: { Args: { _store_id: string }; Returns: boolean }
       cashier_create: {
         Args: {
