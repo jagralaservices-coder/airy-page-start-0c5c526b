@@ -255,12 +255,19 @@ serve(async (req) => {
     // Use provided password first, then pin, then generate one
     const providedPasswordValue = (providedPassword?.trim() || pin?.trim() || '').trim()
     const staffPin = (pin || providedPasswordValue || generateNumericCode(4)).trim()
-    
-    // Use the provided password/pin as auth password if it's at least 6 chars
-    // Otherwise generate a strong one
-    const password = providedPasswordValue.length >= 6 
-      ? providedPasswordValue 
-      : `${crypto.randomUUID()}Aa!1`
+
+    // Determine the auth password.
+    // - If caller sent a value >= 6 chars, use it verbatim (owners/admins pass real passwords, or client-augmented PINs like "1234Aa@1").
+    // - If caller sent a short numeric PIN (e.g. "1234"), augment with "Aa@1" so it meets Supabase's 6-char minimum AND matches the fallback AuthPage tries on login.
+    // - Only fall back to a random UUID as a last resort (empty input).
+    let password: string
+    if (providedPasswordValue.length >= 6) {
+      password = providedPasswordValue
+    } else if (providedPasswordValue.length > 0 && /^\d+$/.test(providedPasswordValue)) {
+      password = providedPasswordValue + 'Aa@1'
+    } else {
+      password = `${crypto.randomUUID()}Aa!1`
+    }
 
     // Try to create auth user, or reuse existing one
     let userId: string
