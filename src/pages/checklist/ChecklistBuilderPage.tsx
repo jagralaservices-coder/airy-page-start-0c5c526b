@@ -21,11 +21,14 @@ const INPUT_OPTIONS: { value: InputType; label: string; hint: string }[] = [
   { value: 'number', label: 'Number', hint: 'Numeric reading' },
 ];
 
-const SHIFTS = ['Opening', 'Mid Shift', 'Closing'] as const;
+const SHIFT_TYPES = ['Opening', 'Mid Shift', 'Closing', 'Any Shift', 'Custom Shift'] as const;
+const SHIFTS_WITH_TIME = ['Opening', 'Mid Shift', 'Closing', 'Custom Shift'];
 const SCHEDULES = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+  { value: 'once', label: 'One Time' },
   { value: 'custom', label: 'Custom' },
 ];
 const DEPARTMENTS = ['Kitchen', 'Service', 'Cash Counter', 'Housekeeping', 'Delivery', 'Store', 'Custom'];
