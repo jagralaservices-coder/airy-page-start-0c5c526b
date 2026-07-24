@@ -88,8 +88,8 @@ const ChecklistSubmitPage: React.FC = () => {
       const recipients = Array.from(new Set((owners as any[])?.map((o: any) => o.user_id).filter(Boolean) ?? []));
       if (recipients.length) {
         await table('checklist_notifications').insert(recipients.map((uid: string) => ({
-          user_id: uid, merchant_id, kind: 'submitted', title: 'New checklist submission',
-          body: `${userRole?.full_name ?? user.email ?? 'Staff'} submitted a checklist`,
+          user_id: uid, merchant_id: merchantId, kind: 'submitted', title: 'New checklist submission',
+          body: `${user.user_metadata?.full_name ?? user.email ?? 'Staff'} submitted a checklist`,
           payload: { submission_id: sub.id },
         })));
       }
