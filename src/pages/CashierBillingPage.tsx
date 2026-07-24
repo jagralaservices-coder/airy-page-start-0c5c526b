@@ -30,6 +30,7 @@ export default function CashierBillingPage() {
   const pos = usePOSSafe();
   const storeId = pos?.activeStore?.id || '';
   const storeName = pos?.activeStore?.name || '';
+  const isStoreLogin = !!pos?.isStoreLogin || (typeof window !== 'undefined' && localStorage.getItem('pos_is_store_login') === 'true');
   const [mode, setMode] = useState<boolean | null>(null);
   const [session, setSession] = useState<CashierSession | null>(getCashierSession());
 
@@ -44,6 +45,16 @@ export default function CashierBillingPage() {
     window.addEventListener('cashier:session-changed', onChange as any);
     return () => window.removeEventListener('cashier:session-changed', onChange as any);
   }, []);
+
+  // Direct Store ID login should open billing directly. The optional cashier
+  // PIN gate is only for owner/manager sessions when they explicitly enable it.
+  if (isStoreLogin) {
+    return (
+      <Suspense fallback={<div className="p-6">Loading billing…</div>}>
+        <POSBillingPage />
+      </Suspense>
+    );
+  }
 
   // Mode loading — show billing optimistically (cached value already applied).
   if (mode === null) {
