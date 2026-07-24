@@ -52,11 +52,12 @@ const OrderSummaryPage: React.FC = () => {
   };
 
   const handleExport = () => {
-    const headers = ['Order ID', 'Date', 'Type', 'Items', 'Amount', 'Status', 'Payment'];
+    const headers = ['Order ID', 'Date', 'Type', 'Cashier', 'Items', 'Amount', 'Status', 'Payment'];
     const rows = orders.map(o => [
       o.id.slice(-6).toUpperCase(),
       new Date(o.createdAt).toLocaleString(),
       o.orderType,
+      o.cashierName || '—',
       Array.isArray(o.items) ? o.items.length : 0,
       o.total,
       o.status,
