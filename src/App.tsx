@@ -672,6 +672,9 @@ const AppRoutes = () => {
       <Route path="/reports/order" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><OrderSummaryPage /></ProtectedRoute>
       } />
+      <Route path="/reports/cashier" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><CashierReportPage /></ProtectedRoute>
+      } />
       <Route path="/reports/executive" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><ExecutiveSalesPage /></ProtectedRoute>
       } />
