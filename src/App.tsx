@@ -179,6 +179,15 @@ const CostCentersPage = lazy(() => import("./pages/accounting/CostCentersPage"))
 const CostCenterReport = lazy(() => import("./pages/accounting/CostCenterReport"));
 const FixedAssetsPage = lazy(() => import("./pages/accounting/FixedAssetsPage"));
 const DepreciationPage = lazy(() => import("./pages/accounting/DepreciationPage"));
+const ChecklistLibraryPage = lazy(() => import("./pages/checklist/ChecklistLibraryPage"));
+const ChecklistBuilderPage = lazy(() => import("./pages/checklist/ChecklistBuilderPage"));
+const UniformReferencePage = lazy(() => import("./pages/checklist/UniformReferencePage"));
+const ChecklistReviewPage = lazy(() => import("./pages/checklist/ChecklistReviewPage"));
+const ChecklistReportsPage = lazy(() => import("./pages/checklist/ChecklistReportsPage"));
+const ChecklistAuditPage = lazy(() => import("./pages/checklist/ChecklistAuditPage"));
+const StaffChecklistsPage = lazy(() => import("./pages/checklist/StaffChecklistsPage"));
+const ChecklistSubmitPage = lazy(() => import("./pages/checklist/ChecklistSubmitPage"));
+const StaffChecklistHistoryPage = lazy(() => import("./pages/checklist/StaffChecklistHistoryPage"));
 import { PWAInstallPrompt } from "./components/pos/PWAInstallPrompt";
 import { BackgroundQROrderManager } from "./components/pos/BackgroundQROrderManager";
 
