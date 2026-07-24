@@ -95,7 +95,7 @@ const AuthPage: React.FC = () => {
       localStorage.removeItem('pos_last_path');
     }
     
-    if (role !== 'admin' && role !== 'super_admin' && role !== 'owner' && lastPath && lastPath.startsWith('/') && !lastPath.startsWith('//') && lastPath !== '/' && lastPath !== '/auth' && lastPath !== '/reset-password' && !lastPath.startsWith('/admin')) {
+    if (role !== 'admin' && role !== 'super_admin' && role !== 'owner' && role !== 'merchant' && lastPath && lastPath.startsWith('/') && !lastPath.startsWith('//') && lastPath !== '/' && lastPath !== '/auth' && lastPath !== '/reset-password' && !lastPath.startsWith('/admin')) {
       try {
         navigate(lastPath, { replace: true });
         return;
@@ -104,7 +104,8 @@ const AuthPage: React.FC = () => {
     switch (role) {
       case 'super_admin': 
       case 'admin': navigate('/admin/dashboard', { replace: true }); break;
-      case 'owner': navigate('/dashboard', { replace: true }); break;
+      case 'owner':
+      case 'merchant': navigate('/dashboard', { replace: true }); break;
       case 'store_manager': navigate('/pos', { replace: true }); break;
       case 'cashier': navigate('/pos', { replace: true }); break;
       case 'staff': navigate('/staff-dashboard', { replace: true }); break;
