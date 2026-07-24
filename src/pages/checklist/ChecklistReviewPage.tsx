@@ -59,7 +59,7 @@ const ChecklistReviewPage: React.FC = () => {
     await table('checklist_submissions').update({ status: decision }).eq('id', s.id);
     await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: s.id, action: decision });
     await table('checklist_notifications').insert({
-      user_id: s.staff_user_id, merchant_id, kind: decision,
+      user_id: s.staff_user_id, merchant_id: merchantId, kind: decision,
       title: `Your checklist was ${decision}`, body: notes ?? '',
       payload: { submission_id: s.id },
     });
