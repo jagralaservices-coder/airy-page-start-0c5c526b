@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, GripVertical, Save, Users, Upload, Image as ImageIcon, X } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, GripVertical, Save, Users, Upload, Image as ImageIcon, X, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,12 +12,18 @@ import { toast } from 'sonner';
 
 const table = (n: string) => supabase.from(n as any);
 
-type InputType = 'tick' | 'image' | 'tick_image';
+type InputType = 'tick' | 'image' | 'tick_image' | 'text' | 'number';
 const INPUT_OPTIONS: { value: InputType; label: string; hint: string }[] = [
-  { value: 'tick', label: 'Tick only', hint: 'e.g. PC ON, Gas OFF' },
-  { value: 'image', label: 'Image only', hint: 'e.g. Kitchen cleaning' },
-  { value: 'tick_image', label: 'Tick + Image', hint: 'e.g. Hand wash, Uniform' },
+  { value: 'tick', label: 'Tick Only', hint: 'e.g. PC ON, Gas OFF' },
+  { value: 'image', label: 'Image Only', hint: 'e.g. Kitchen cleaning' },
+  { value: 'tick_image', label: 'Tick + Image', hint: 'e.g. Uniform, Hand wash' },
+  { value: 'text', label: 'Text', hint: 'Short written answer' },
+  { value: 'number', label: 'Number', hint: 'Numeric reading' },
 ];
+
+const CATEGORIES = ['Opening', 'Mid Shift', 'Closing', 'Daily', 'Weekly', 'Monthly', 'Custom'];
+const DEPARTMENTS = ['Kitchen', 'Service', 'Cash Counter', 'Housekeeping', 'Delivery', 'Store', 'Custom'];
+const FREQUENCIES = ['daily', 'weekly', 'monthly', 'before_shift', 'after_shift', 'custom', 'once'];
 
 interface ItemDraft {
   _new?: boolean;
@@ -27,11 +33,13 @@ interface ItemDraft {
   description?: string | null;
   input_type: InputType;
   required: boolean;
+  photo_required?: boolean;
+  video_required?: boolean;
   gps_required?: boolean;
+  time_required?: boolean;
   ai_verify?: boolean;
   order_index: number;
   answer_type?: string;
-  photo_required?: boolean;
 }
 
 interface RefImg { id: string; item_id: string; storage_path: string; url?: string }
@@ -44,6 +52,8 @@ const ChecklistBuilderPage: React.FC = () => {
   const invalidate = useInvalidateChecklists();
 
   const [checklist, setChecklist] = useState<any>(null);
+  const [customDepartment, setCustomDepartment] = useState('');
+  const [deptMode, setDeptMode] = useState<string>('');
   const { data: items = [] } = useChecklistItems(id ?? null);
   const { data: assignments = [] } = useAssignments(id);
 
@@ -51,6 +61,7 @@ const ChecklistBuilderPage: React.FC = () => {
   const [refs, setRefs] = useState<RefImg[]>([]);
   const [staff, setStaff] = useState<any[]>([]);
   const [stores, setStores] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setLocalItems((items as any[]).map((it) => ({
@@ -80,6 +91,14 @@ const ChecklistBuilderPage: React.FC = () => {
     (async () => {
       const { data } = await table('checklists').select('*').eq('id', id).maybeSingle();
       setChecklist(data);
+      if (data?.department) {
+        if (DEPARTMENTS.includes(data.department)) {
+          setDeptMode(data.department);
+        } else {
+          setDeptMode('Custom');
+          setCustomDepartment(data.department);
+        }
+      }
     })();
   }, [id]);
 
@@ -120,43 +139,64 @@ const ChecklistBuilderPage: React.FC = () => {
   const patch = (i: number, p: Partial<ItemDraft>) =>
     setLocalItems(prev => prev.map((it, idx) => idx === i ? { ...it, ...p } : it));
 
+  const answerTypeFor = (t: InputType): string => {
+    if (t === 'image' || t === 'tick_image') return 'photo';
+    if (t === 'text') return 'text';
+    if (t === 'number') return 'number';
+    return 'yes_no';
+  };
+
   const saveAll = async () => {
     if (!id || !merchantId || !user?.id) return;
-    if (checklist) {
+    if (!checklist?.name?.trim()) { toast.error('Checklist name is required'); return; }
+    setSaving(true);
+    try {
+      const dept = deptMode === 'Custom' ? customDepartment.trim() : deptMode;
       await table('checklists').update({
-        name: checklist.name, description: checklist.description, department: checklist.department,
-        frequency: checklist.frequency, is_active: checklist.is_active,
+        name: checklist.name.trim(),
+        description: checklist.description ?? '',
+        department: dept ?? '',
+        category: checklist.category ?? '',
+        frequency: checklist.frequency ?? 'daily',
+        is_active: !!checklist.is_active,
       }).eq('id', id);
-    }
-    for (let idx = 0; idx < localItems.length; idx++) {
-      const it = { ...localItems[idx], order_index: idx };
-      const requiresImage = it.input_type === 'image' || it.input_type === 'tick_image';
-      const payload = {
-        title: it.title,
-        description: it.description ?? null,
-        input_type: it.input_type,
-        // keep legacy columns coherent
-        answer_type: requiresImage ? 'photo' : 'yes_no',
-        photo_required: requiresImage,
-        required: it.required ?? true,
-        gps_required: it.gps_required ?? false,
-        ai_verify: requiresImage, // AI runs only for image items
-        order_index: idx,
-      };
-      if (it._new || !it.id) {
-        await table('checklist_items').insert({ ...payload, checklist_id: id });
-      } else {
-        await table('checklist_items').update(payload).eq('id', it.id);
+
+      for (let idx = 0; idx < localItems.length; idx++) {
+        const it = { ...localItems[idx], order_index: idx };
+        const isImage = it.input_type === 'image' || it.input_type === 'tick_image';
+        const payload: any = {
+          title: it.title,
+          description: it.description ?? null,
+          input_type: it.input_type,
+          answer_type: answerTypeFor(it.input_type),
+          photo_required: !!(it.photo_required || isImage),
+          video_required: !!it.video_required,
+          gps_required: !!it.gps_required,
+          time_required: !!it.time_required,
+          ai_verify: !!it.ai_verify,
+          required: it.required ?? true,
+          order_index: idx,
+        };
+        if (it._new || !it.id) {
+          const { data: ins } = await table('checklist_items').insert({ ...payload, checklist_id: id }).select('id').maybeSingle();
+          if (ins?.id) setLocalItems(prev => prev.map((x, xi) => xi === idx ? { ...x, id: ins.id, _new: false } : x));
+        } else {
+          await table('checklist_items').update(payload).eq('id', it.id);
+        }
       }
+      await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'checklist', entity_id: id, action: 'edited' });
+      toast.success('Saved');
+      invalidate();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to save');
+    } finally {
+      setSaving(false);
     }
-    await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'checklist', entity_id: id, action: 'edited' });
-    toast.success('Saved');
-    invalidate();
   };
 
   const uploadRef = async (item: ItemDraft, file: File) => {
     if (!merchantId || !user?.id) return;
-    if (!item.id) { toast.error('Save the item first, then upload its reference image.'); return; }
+    if (!item.id) { toast.error('Save the checklist first, then upload references.'); return; }
     const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `${merchantId}/items/${item.id}/${Date.now()}-${safe}`;
     const { error: upErr } = await supabase.storage.from('uniform-reference').upload(path, file, { upsert: false, contentType: file.type });
@@ -201,20 +241,58 @@ const ChecklistBuilderPage: React.FC = () => {
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={() => nav('/checklists')}><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>
         <div className="flex-1" />
-        <Button onClick={saveAll}><Save className="h-4 w-4 mr-1" /> Save</Button>
+        <Button onClick={saveAll} disabled={saving}><Save className="h-4 w-4 mr-1" /> {saving ? 'Saving…' : 'Save'}</Button>
       </div>
 
       <Card className="rounded-2xl bg-card/60 backdrop-blur">
-        <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Checklist Details</CardTitle></CardHeader>
         <CardContent className="grid md:grid-cols-2 gap-3">
-          <Input value={checklist.name ?? ''} onChange={e => setChecklist({ ...checklist, name: e.target.value })} placeholder="Name" />
-          <Input value={checklist.department ?? ''} onChange={e => setChecklist({ ...checklist, department: e.target.value })} placeholder="Department" />
-          <Input className="md:col-span-2" value={checklist.description ?? ''} onChange={e => setChecklist({ ...checklist, description: e.target.value })} placeholder="Description" />
-          <select className="border border-border bg-background rounded-md px-3 py-2 text-sm" value={checklist.frequency} onChange={e => setChecklist({ ...checklist, frequency: e.target.value })}>
-            {['daily','weekly','monthly','before_shift','after_shift','custom','once'].map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={checklist.is_active} onChange={e => setChecklist({ ...checklist, is_active: e.target.checked })} />
+          <div className="md:col-span-2">
+            <label className="text-xs text-muted-foreground">Checklist Name *</label>
+            <Input value={checklist.name ?? ''} onChange={e => setChecklist({ ...checklist, name: e.target.value })} placeholder="e.g. Morning Opening Checklist" />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground">Category</label>
+            <select
+              className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm"
+              value={checklist.category ?? ''}
+              onChange={e => setChecklist({ ...checklist, category: e.target.value })}
+            >
+              <option value="">Select category…</option>
+              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground">Department</label>
+            <select
+              className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm"
+              value={deptMode}
+              onChange={e => setDeptMode(e.target.value)}
+            >
+              <option value="">Select department…</option>
+              {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {deptMode === 'Custom' && (
+              <Input className="mt-2" value={customDepartment} onChange={e => setCustomDepartment(e.target.value)} placeholder="Custom department name" />
+            )}
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs text-muted-foreground">Description</label>
+            <Input value={checklist.description ?? ''} onChange={e => setChecklist({ ...checklist, description: e.target.value })} placeholder="What is this checklist for?" />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground">Frequency</label>
+            <select className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm" value={checklist.frequency} onChange={e => setChecklist({ ...checklist, frequency: e.target.value })}>
+              {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm mt-6">
+            <input type="checkbox" checked={!!checklist.is_active} onChange={e => setChecklist({ ...checklist, is_active: e.target.checked })} />
             Active
           </label>
         </CardContent>
@@ -222,12 +300,13 @@ const ChecklistBuilderPage: React.FC = () => {
 
       <Card className="rounded-2xl bg-card/60 backdrop-blur">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Items</CardTitle>
+          <CardTitle>Checklist Items</CardTitle>
           <Button size="sm" onClick={addItem}><Plus className="h-4 w-4 mr-1" /> Add item</Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {localItems.map((it, i) => {
-            const needsImage = it.input_type === 'image' || it.input_type === 'tick_image';
+            const isImage = it.input_type === 'image' || it.input_type === 'tick_image';
+            const showRefs = isImage || !!it.ai_verify || !!it.photo_required;
             const itemRefs = refs.filter(r => r.item_id === it.id);
             return (
               <div key={it.id ?? `n-${i}`} className="rounded-xl border border-border p-3 space-y-3 bg-background/50">
@@ -237,13 +316,13 @@ const ChecklistBuilderPage: React.FC = () => {
                     <button onClick={() => move(i, 1)} className="text-muted-foreground hover:text-foreground">▼</button>
                   </div>
                   <GripVertical className="h-4 w-4 text-muted-foreground" />
-                  <Input className="flex-1" value={it.title} onChange={e => patch(i, { title: e.target.value })} placeholder="Item title (e.g. Uniform)" />
+                  <Input className="flex-1" value={it.title} onChange={e => patch(i, { title: e.target.value })} placeholder="Item name (e.g. Uniform)" />
                   <Button variant="ghost" size="sm" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4 text-red-500" /></Button>
                 </div>
                 <Input value={it.description ?? ''} onChange={e => patch(i, { description: e.target.value })} placeholder="Instructions (optional)" />
 
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">Input type</div>
+                  <div className="text-xs text-muted-foreground mb-1">Response Type</div>
                   <div className="flex flex-wrap gap-2">
                     {INPUT_OPTIONS.map(opt => (
                       <button
@@ -260,31 +339,59 @@ const ChecklistBuilderPage: React.FC = () => {
                         {opt.label}
                       </button>
                     ))}
-                    <label className="flex items-center gap-1 text-xs ml-auto">
-                      <input type="checkbox" checked={!!it.required} onChange={e => patch(i, { required: e.target.checked })} />
-                      Required
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Additional Options</div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!it.required} onChange={e => patch(i, { required: e.target.checked })} /> Required
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!it.photo_required || isImage} disabled={isImage} onChange={e => patch(i, { photo_required: e.target.checked })} /> Photo Required
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!it.video_required} onChange={e => patch(i, { video_required: e.target.checked })} /> Video Required
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!it.gps_required} onChange={e => patch(i, { gps_required: e.target.checked })} /> GPS Required
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!it.time_required} onChange={e => patch(i, { time_required: e.target.checked })} /> Time Required
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <input type="checkbox" checked={!!it.ai_verify} onChange={e => patch(i, { ai_verify: e.target.checked })} /> AI Verification Required
                     </label>
                   </div>
                 </div>
 
-                {needsImage && (
+                {showRefs && (
                   <div className="rounded-lg border border-dashed border-border p-3 space-y-2 bg-muted/20">
                     <div className="flex items-center justify-between">
-                      <div className="text-xs font-semibold flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Reference image(s) for AI comparison</div>
+                      <div className="text-xs font-semibold flex items-center gap-1"><ImageIcon className="h-3.5 w-3.5" /> Reference Sample Images</div>
                       <label className="cursor-pointer inline-flex items-center gap-1 text-xs px-2 py-1 rounded border border-border hover:bg-accent">
                         <Upload className="h-3.5 w-3.5" /> Upload
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
                           className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadRef(it, f); e.currentTarget.value = ''; }}
+                          onChange={async e => {
+                            const files = Array.from(e.target.files ?? []);
+                            for (const f of files) await uploadRef(it, f);
+                            e.currentTarget.value = '';
+                          }}
                         />
                       </label>
                     </div>
-                    {itemRefs.length === 0 ? (
-                      <div className="text-xs text-amber-500">
-                        No reference uploaded yet. AI verification will not run for this item until a reference is added.
-                        {!it.id && ' Save the checklist first to enable uploading.'}
+                    {!it.id && (
+                      <div className="text-xs text-muted-foreground">Save the checklist first to enable uploading.</div>
+                    )}
+                    {it.id && itemRefs.length === 0 ? (
+                      <div className="text-xs text-amber-500 flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Reference Image Not Configured — {it.ai_verify ? 'AI verification will not run for this item until a reference is added.' : 'add a sample so staff know the standard.'}
                       </div>
                     ) : (
                       <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
