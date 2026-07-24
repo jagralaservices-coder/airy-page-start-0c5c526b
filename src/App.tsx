@@ -588,6 +588,34 @@ const AppRoutes = () => {
       <Route path="/staff-portal" element={
         <ProtectedRoute><StaffPortalPage /></ProtectedRoute>
       } />
+      <Route path="/checklists" element={
+        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistLibraryPage /></ProtectedRoute>
+      } />
+      <Route path="/checklists/uniform" element={
+        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><UniformReferencePage /></ProtectedRoute>
+      } />
+      <Route path="/checklists/review" element={
+        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistReviewPage /></ProtectedRoute>
+      } />
+      <Route path="/checklists/reports" element={
+        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistReportsPage /></ProtectedRoute>
+      } />
+      <Route path="/checklists/audit" element={
+        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistAuditPage /></ProtectedRoute>
+      } />
+      <Route path="/checklists/:id/edit" element={
+        <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistBuilderPage /></ProtectedRoute>
+      } />
+      <Route path="/staff/checklists" element={
+        <ProtectedRoute><StaffChecklistsPage /></ProtectedRoute>
+      } />
+      <Route path="/staff/checklists/:id" element={
+        <ProtectedRoute><ChecklistSubmitPage /></ProtectedRoute>
+      } />
+      <Route path="/staff/checklists/history/:id" element={
+        <ProtectedRoute><StaffChecklistHistoryPage /></ProtectedRoute>
+      } />
+
       <Route path="/settings" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><OwnerSettingsPage /></ProtectedRoute>
       } />
