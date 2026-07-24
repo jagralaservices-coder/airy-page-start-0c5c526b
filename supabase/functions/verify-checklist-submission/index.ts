@@ -142,13 +142,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Submission not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Load checklist items that require image (image or tick_image)
+    // Load checklist items that require image AND have AI verification explicitly enabled.
+    // AI is dynamic: it only runs on items the owner opted in.
     const { data: items } = await admin
       .from('checklist_items')
       .select('id, title, description, input_type, ai_verify')
       .eq('checklist_id', submission.checklist_id);
 
-    const imageItems = (items ?? []).filter((it: any) => it.input_type === 'image' || it.input_type === 'tick_image');
+    const imageItems = (items ?? []).filter((it: any) =>
+      (it.input_type === 'image' || it.input_type === 'tick_image') && it.ai_verify === true
+    );
 
     // Load submitted images grouped by item
     const { data: subImgs } = await admin
