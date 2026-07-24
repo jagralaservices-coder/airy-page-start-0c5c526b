@@ -27,10 +27,8 @@ const config: CapacitorConfig = {
       presentationOptions: ["badge", "sound", "alert"]
     }
   },
-  // IMPORTANT: No server.url = app uses local assets from dist folder
-  // This removes browser-like URL bar and ensures native experience
-  // The app will work completely offline
   server: {
+    url: "https://5809fbdb-bd72-4f7e-949b-2caa284ac9da.lovableproject.com?forceHideBadge=true",
     cleartext: true,
     androidScheme: "https",
     // Only allow navigation to necessary domains for API calls
