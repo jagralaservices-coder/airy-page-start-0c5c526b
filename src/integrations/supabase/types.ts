@@ -1304,6 +1304,7 @@ export type Database = {
       }
       checklists: {
         Row: {
+          category: string | null
           created_at: string
           created_by: string | null
           custom_cron: string | null
@@ -1318,6 +1319,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           custom_cron?: string | null
@@ -1332,6 +1334,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           custom_cron?: string | null
@@ -8842,7 +8845,7 @@ export type Database = {
         | "after_shift"
         | "custom"
         | "once"
-      checklist_input_type: "tick" | "image" | "tick_image"
+      checklist_input_type: "tick" | "image" | "tick_image" | "text" | "number"
       checklist_submission_status:
         | "pending"
         | "ai_pass"
@@ -9079,7 +9082,7 @@ export const Constants = {
         "custom",
         "once",
       ],
-      checklist_input_type: ["tick", "image", "tick_image"],
+      checklist_input_type: ["tick", "image", "tick_image", "text", "number"],
       checklist_submission_status: [
         "pending",
         "ai_pass",
