@@ -60,6 +60,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const clearStoredAuthTokens = () => {
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (error) {
+    console.warn('[Auth] Failed to clear stored auth tokens:', error);
+  }
+};
+
 export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -662,6 +674,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
       localStorage.removeItem('pos_store_backup');
 
       clearLegacyLoginState();
+      clearStoredAuthTokens();
 
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: normalizedEmail,
