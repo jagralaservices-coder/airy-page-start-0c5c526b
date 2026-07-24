@@ -78,6 +78,7 @@ const CategorySummaryPage = lazy(() => import("./pages/reports/CategorySummaryPa
 const ItemSummaryPage = lazy(() => import("./pages/reports/ItemSummaryPage"));
 const SalesSummaryPage = lazy(() => import("./pages/reports/SalesSummaryPage"));
 const OrderSummaryPage = lazy(() => import("./pages/reports/OrderSummaryPage"));
+const CashierReportPage = lazy(() => import("./pages/reports/CashierReportPage"));
 const ExecutiveSalesPage = lazy(() => import("./pages/reports/ExecutiveSalesPage"));
 const EmployeeSummaryPage = lazy(() => import("./pages/reports/EmployeeSummaryPage"));
 const EmployeePerformancePage = lazy(() => import("./pages/reports/EmployeePerformancePage"));
