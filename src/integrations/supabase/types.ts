@@ -95,6 +95,63 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_item_verification_results: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          detected_problems: Json | null
+          id: string
+          item_id: string
+          model: string | null
+          raw_response: Json | null
+          reason: string | null
+          status: string
+          submission_id: string
+          suggestions: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          detected_problems?: Json | null
+          id?: string
+          item_id: string
+          model?: string | null
+          raw_response?: Json | null
+          reason?: string | null
+          status: string
+          submission_id: string
+          suggestions?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          detected_problems?: Json | null
+          id?: string
+          item_id?: string
+          model?: string | null
+          raw_response?: Json | null
+          reason?: string | null
+          status?: string
+          submission_id?: string
+          suggestions?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_item_verification_results_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_item_verification_results_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_verification_results: {
         Row: {
           categories: Json
@@ -1014,6 +1071,44 @@ export type Database = {
           },
         ]
       }
+      checklist_item_reference_images: {
+        Row: {
+          created_at: string
+          id: string
+          item_id: string
+          label: string | null
+          merchant_id: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          item_id: string
+          label?: string | null
+          merchant_id: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          item_id?: string
+          label?: string | null
+          merchant_id?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_item_reference_images_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_items: {
         Row: {
           ai_verify: boolean
@@ -1023,6 +1118,7 @@ export type Database = {
           description: string | null
           gps_required: boolean
           id: string
+          input_type: Database["public"]["Enums"]["checklist_input_type"]
           order_index: number
           photo_required: boolean
           required: boolean
@@ -1039,6 +1135,7 @@ export type Database = {
           description?: string | null
           gps_required?: boolean
           id?: string
+          input_type?: Database["public"]["Enums"]["checklist_input_type"]
           order_index?: number
           photo_required?: boolean
           required?: boolean
@@ -1055,6 +1152,7 @@ export type Database = {
           description?: string | null
           gps_required?: boolean
           id?: string
+          input_type?: Database["public"]["Enums"]["checklist_input_type"]
           order_index?: number
           photo_required?: boolean
           required?: boolean
@@ -8744,6 +8842,7 @@ export type Database = {
         | "after_shift"
         | "custom"
         | "once"
+      checklist_input_type: "tick" | "image" | "tick_image"
       checklist_submission_status:
         | "pending"
         | "ai_pass"
@@ -8980,6 +9079,7 @@ export const Constants = {
         "custom",
         "once",
       ],
+      checklist_input_type: ["tick", "image", "tick_image"],
       checklist_submission_status: [
         "pending",
         "ai_pass",
