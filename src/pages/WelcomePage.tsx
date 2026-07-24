@@ -24,7 +24,7 @@ const WelcomePage: React.FC = () => {
         localStorage.removeItem('pos_last_path');
       }
       
-      if (userRole.role !== 'admin' && userRole.role !== 'owner' && userRole.role !== 'super_admin' && userRole.role !== 'cashier' && userRole.role !== 'staff' && lastPath && lastPath.startsWith('/') && !lastPath.startsWith('//') && lastPath !== '/' && lastPath !== '/index' && lastPath !== '/index.html' && lastPath !== '/auth' && lastPath !== '/reset-password') {
+      if (userRole.role !== 'admin' && userRole.role !== 'owner' && userRole.role !== 'merchant' && userRole.role !== 'super_admin' && userRole.role !== 'cashier' && userRole.role !== 'staff' && lastPath && lastPath.startsWith('/') && !lastPath.startsWith('//') && lastPath !== '/' && lastPath !== '/index' && lastPath !== '/index.html' && lastPath !== '/auth' && lastPath !== '/reset-password') {
         try {
           navigate(lastPath, { replace: true });
         } catch (e) {
@@ -38,6 +38,7 @@ const WelcomePage: React.FC = () => {
             navigate('/admin-dashboard', { replace: true });
             break;
           case 'owner':
+          case 'merchant':
             navigate('/dashboard', { replace: true });
             break;
           case 'store_manager':
