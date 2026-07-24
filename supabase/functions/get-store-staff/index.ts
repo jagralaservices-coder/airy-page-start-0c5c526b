@@ -102,7 +102,7 @@ serve(async (req) => {
 
     // Verify store exists
     const { data: storeData, error: storeError } = await supabaseAdmin
-      .from('stores').select('id, customer_id, store_name')
+      .from('stores').select('id, customer_id, name')
       .eq('id', store_id).eq('is_active', true).maybeSingle()
 
     if (storeError || !storeData) {
