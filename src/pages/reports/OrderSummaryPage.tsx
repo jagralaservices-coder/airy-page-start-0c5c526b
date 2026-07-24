@@ -94,10 +94,11 @@ const OrderSummaryPage: React.FC = () => {
           title: 'Recent Orders',
           type: 'table',
           data: {
-            headers: ['Order ID', 'Date', 'Type', 'Amount', 'Status', 'Payment'],
+            headers: ['Order ID', 'Date', 'Cashier', 'Type', 'Amount', 'Status', 'Payment'],
             rows: orders.slice(0, 30).map(o => [
               o.id.slice(-6).toUpperCase(),
               new Date(o.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }),
+              o.cashierName || '—',
               o.orderType,
               formatReportCurrency(o.total),
               o.status,
