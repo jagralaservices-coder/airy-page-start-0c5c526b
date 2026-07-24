@@ -58,8 +58,8 @@ const ChecklistSubmitPage: React.FC = () => {
     setBusy(true);
     try {
       const { data: sub, error } = await table('checklist_submissions').insert({
-        checklist_id: id, merchant_id: merchantId, store_id: store?.storeId ?? null,
-        staff_user_id: user.id, staff_name: userRole?.full_name ?? user.email ?? null,
+        checklist_id: id, merchant_id: merchantId, store_id: store?.activeStoreId ?? null,
+        staff_user_id: user.id, staff_name: user.user_metadata?.full_name ?? user.email ?? null,
         status: 'pending', gps_lat: gps?.lat, gps_lng: gps?.lng,
       }).select('id').maybeSingle();
       if (error || !sub) throw new Error(error?.message ?? 'Insert failed');
