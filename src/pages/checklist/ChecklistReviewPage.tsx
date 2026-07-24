@@ -6,7 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSubmissions, useUniformReferences, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
 import { useMerchant } from '@/contexts/MerchantContext';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
-import { AiScorePanel } from '@/components/checklist/AiScorePanel';
+import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemResultPanel';
 import { ImageCompareViewer } from '@/components/checklist/ImageCompareViewer';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -84,7 +84,15 @@ const ChecklistReviewPage: React.FC = () => {
        filtered.length === 0 ? <Card className="rounded-2xl bg-card/60 backdrop-blur"><CardContent className="p-10 text-center text-muted-foreground">No submissions.</CardContent></Card> :
        <div className="grid md:grid-cols-2 gap-4">
         {filtered.map((s: any) => {
-          const ai = s.ai_verification_results?.[0];
+          const itemResults: AiItemResult[] = (s.ai_item_verification_results ?? []).map((r: any) => ({
+            item_id: r.item_id,
+            title: r.item_title ?? 'Item',
+            status: r.status,
+            confidence: r.confidence ?? null,
+            reason: r.reason,
+            detected_problems: r.detected_problems,
+            suggestions: r.suggestions,
+          }));
           return (
             <Card key={s.id} className="rounded-2xl bg-card/60 backdrop-blur">
               <CardHeader>
@@ -104,7 +112,7 @@ const ChecklistReviewPage: React.FC = () => {
                     ))}
                   </div>
                 )}
-                {ai && <AiScorePanel categories={ai.categories ?? {}} overall={Number(ai.overall_score ?? 0)} result={ai.result} reason={ai.reason} />}
+                <AiItemResultPanel items={itemResults} />
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => setCompare({ ref: refUrls, sub: images[s.id] ?? [] })}><Eye className="h-4 w-4 mr-1" /> Compare</Button>
                   <Button size="sm" onClick={() => review(s, 'approved')} disabled={s.status === 'approved'}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve</Button>

@@ -132,7 +132,7 @@ export function useSubmissions(filter?: { staffOnly?: boolean; status?: Submissi
     queryKey: ['checklist_submissions', merchantId, filter?.staffOnly, filter?.status, user?.id],
     enabled: !!merchantId || !!filter?.staffOnly,
     queryFn: async () => {
-      let q = table('checklist_submissions').select('*, ai_verification_results(*)').order('submitted_at', { ascending: false });
+      let q = table('checklist_submissions').select('*, ai_verification_results(*), ai_item_verification_results(*)').order('submitted_at', { ascending: false });
       if (filter?.staffOnly && user?.id) q = q.eq('staff_user_id', user.id);
       else if (merchantId) q = q.eq('merchant_id', merchantId);
       if (filter?.status) q = q.eq('status', filter.status);

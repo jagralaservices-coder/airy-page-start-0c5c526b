@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { AiScorePanel } from '@/components/checklist/AiScorePanel';
+import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemResultPanel';
 
 const table = (n: string) => supabase.from(n as any);
 
@@ -13,14 +13,26 @@ const StaffChecklistHistoryPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
   const [sub, setSub] = useState<any>(null);
-  const [ai, setAi] = useState<any>(null);
+  const [itemResults, setItemResults] = useState<AiItemResult[]>([]);
   const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
     if (!id) return;
     (async () => {
-      const { data: s } = await table('checklist_submissions').select('*, ai_verification_results(*)').eq('id', id).maybeSingle();
-      setSub(s); setAi(s?.ai_verification_results?.[0] ?? null);
+      const { data: s } = await table('checklist_submissions')
+        .select('*, ai_item_verification_results(*)')
+        .eq('id', id)
+        .maybeSingle();
+      setSub(s);
+      setItemResults(((s as any)?.ai_item_verification_results ?? []).map((r: any) => ({
+        item_id: r.item_id,
+        title: r.item_title ?? 'Item',
+        status: r.status,
+        confidence: r.confidence ?? null,
+        reason: r.reason,
+        detected_problems: r.detected_problems,
+        suggestions: r.suggestions,
+      })));
       const { data: imgs } = await table('submission_images').select('storage_path').eq('submission_id', id);
       const urls: string[] = [];
       for (const im of (imgs ?? []) as any[]) {
@@ -47,7 +59,7 @@ const StaffChecklistHistoryPage: React.FC = () => {
           {images.length > 0 && <div className="grid grid-cols-3 gap-2">
             {images.map((u, i) => <img key={i} src={u} alt="" className="aspect-square object-cover rounded-lg border border-border" />)}
           </div>}
-          {ai && <AiScorePanel categories={ai.categories ?? {}} overall={Number(ai.overall_score ?? 0)} result={ai.result} reason={ai.reason} />}
+          <AiItemResultPanel items={itemResults} />
         </CardContent>
       </Card>
     </div>
