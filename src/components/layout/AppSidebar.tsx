@@ -19,6 +19,7 @@ import {
   Check,
   Sparkles,
   Users,
+  ClipboardList,
 } from 'lucide-react';
 import { useSupabaseAuth, UserRole } from '@/contexts/SupabaseAuthContext';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
@@ -130,6 +131,18 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       icon: Users, 
       label: 'Cashier IDs',
       allowedRoles: ['admin', 'owner', 'store_manager']
+    },
+    {
+      path: '/checklists',
+      icon: ClipboardList,
+      label: 'Checklists',
+      allowedRoles: ['admin', 'owner', 'store_manager']
+    },
+    {
+      path: '/staff/checklists',
+      icon: ClipboardList,
+      label: 'My Checklists',
+      allowedRoles: ['staff', 'cashier']
     },
     { 
       path: '/settings', 
