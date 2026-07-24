@@ -293,7 +293,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   }
 
   // Check role-based access (only for Supabase auth)
-  if (allowedRoles && (!userRole || !allowedRoles.includes(userRole.role)) && !isImpersonating) {
+  const hasAllowedRole = !!userRole && (
+    allowedRoles?.includes(userRole.role) ||
+    (userRole.role === 'merchant' && allowedRoles?.includes('owner'))
+  );
+
+  if (allowedRoles && (!hasAllowedRole) && !isImpersonating) {
     // If store login is active, allow access
     if (isStoreLogin && activeStore) {
       return renderWithGate(<MainLayout>{children}</MainLayout>);
