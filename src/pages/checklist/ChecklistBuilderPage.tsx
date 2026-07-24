@@ -21,11 +21,14 @@ const INPUT_OPTIONS: { value: InputType; label: string; hint: string }[] = [
   { value: 'number', label: 'Number', hint: 'Numeric reading' },
 ];
 
-const SHIFTS = ['Opening', 'Mid Shift', 'Closing'] as const;
+const SHIFT_TYPES = ['Opening', 'Mid Shift', 'Closing', 'Any Shift', 'Custom Shift'] as const;
+const SHIFTS_WITH_TIME = ['Opening', 'Mid Shift', 'Closing', 'Custom Shift'];
 const SCHEDULES = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+  { value: 'once', label: 'One Time' },
   { value: 'custom', label: 'Custom' },
 ];
 const DEPARTMENTS = ['Kitchen', 'Service', 'Cash Counter', 'Housekeeping', 'Delivery', 'Store', 'Custom'];
@@ -154,6 +157,12 @@ const ChecklistBuilderPage: React.FC = () => {
   const saveAll = async () => {
     if (!id || !merchantId || !user?.id) return;
     if (!checklist?.name?.trim()) { toast.error('Checklist name is required'); return; }
+    const shiftType: string = checklist.shift_type ?? '';
+    const needsTime = SHIFTS_WITH_TIME.includes(shiftType);
+    if (needsTime && (!checklist.shift_start_time || !checklist.shift_end_time)) {
+      toast.error('Start Time and End Time are required for this shift');
+      return;
+    }
     setSaving(true);
     try {
       const dept = deptMode === 'Custom' ? customDepartment.trim() : deptMode;
@@ -161,8 +170,10 @@ const ChecklistBuilderPage: React.FC = () => {
         name: checklist.name.trim(),
         description: checklist.description ?? '',
         department: dept ?? '',
-        category: checklist.category ?? '',
-        shift_time: checklist.shift_time ?? null,
+        category: shiftType,
+        shift_type: shiftType || null,
+        shift_start_time: needsTime ? (checklist.shift_start_time || null) : null,
+        shift_end_time: needsTime ? (checklist.shift_end_time || null) : null,
         frequency: checklist.frequency ?? 'daily',
         is_active: !!checklist.is_active,
       }).eq('id', id);
@@ -259,23 +270,43 @@ const ChecklistBuilderPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground">Shift</label>
+            <label className="text-xs text-muted-foreground">Shift Type</label>
             <select
               className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm"
-              value={checklist.category ?? ''}
-              onChange={e => setChecklist({ ...checklist, category: e.target.value, shift_time: e.target.value ? (checklist.shift_time ?? '') : null })}
+              value={checklist.shift_type ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                const clearTimes = !SHIFTS_WITH_TIME.includes(v);
+                setChecklist({
+                  ...checklist,
+                  shift_type: v,
+                  category: v,
+                  shift_start_time: clearTimes ? null : (checklist.shift_start_time ?? ''),
+                  shift_end_time: clearTimes ? null : (checklist.shift_end_time ?? ''),
+                });
+              }}
             >
-              <option value="">No shift</option>
-              {SHIFTS.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="">Select shift type…</option>
+              {SHIFT_TYPES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            {!!checklist.category && SHIFTS.includes(checklist.category) && (
-              <div className="mt-2">
-                <label className="text-xs text-muted-foreground">Shift Time</label>
-                <Input
-                  type="time"
-                  value={checklist.shift_time ?? ''}
-                  onChange={e => setChecklist({ ...checklist, shift_time: e.target.value })}
-                />
+            {SHIFTS_WITH_TIME.includes(checklist.shift_type ?? '') && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Start Time *</label>
+                  <Input
+                    type="time"
+                    value={checklist.shift_start_time ?? ''}
+                    onChange={e => setChecklist({ ...checklist, shift_start_time: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">End Time *</label>
+                  <Input
+                    type="time"
+                    value={checklist.shift_end_time ?? ''}
+                    onChange={e => setChecklist({ ...checklist, shift_end_time: e.target.value })}
+                  />
+                </div>
               </div>
             )}
           </div>
