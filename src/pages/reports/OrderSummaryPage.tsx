@@ -174,6 +174,7 @@ const OrderSummaryPage: React.FC = () => {
             <TableRow>
               <TableHead>Order ID</TableHead>
               <TableHead>Date & Time</TableHead>
+              <TableHead>Cashier</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Items</TableHead>
               <TableHead className="text-right">Amount</TableHead>
@@ -184,7 +185,7 @@ const OrderSummaryPage: React.FC = () => {
           <TableBody>
             {orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   {isLoading ? 'Loading orders from database...' : 'No orders available'}
                 </TableCell>
               </TableRow>
@@ -193,6 +194,7 @@ const OrderSummaryPage: React.FC = () => {
                 <TableRow key={order.id}>
                   <TableCell className="font-mono font-medium">#{order.id.slice(-6).toUpperCase()}</TableCell>
                   <TableCell>{new Date(order.createdAt).toLocaleString('en-IN')}</TableCell>
+                  <TableCell>{order.cashierName || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell className="capitalize">{order.orderType}</TableCell>
                   <TableCell className="text-right">{Array.isArray(order.items) ? order.items.length : 0}</TableCell>
                   <TableCell className="text-right font-semibold">{formatCurrency(order.total)}</TableCell>
