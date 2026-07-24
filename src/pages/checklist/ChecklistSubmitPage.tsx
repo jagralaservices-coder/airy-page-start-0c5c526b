@@ -14,7 +14,7 @@ import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemRe
 
 const table = (n: string) => supabase.from(n as any);
 
-type InputType = 'tick' | 'image' | 'tick_image';
+type InputType = 'tick' | 'image' | 'tick_image' | 'text' | 'number';
 
 const ChecklistSubmitPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +26,8 @@ const ChecklistSubmitPage: React.FC = () => {
 
   const [ticks, setTicks] = useState<Record<string, boolean>>({});
   const [images, setImages] = useState<Record<string, Blob[]>>({});
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const [numbers, setNumbers] = useState<Record<string, string>>({});
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<AiItemResult[] | null>(null);
@@ -52,6 +54,12 @@ const ChecklistSubmitPage: React.FC = () => {
       if (type === 'image' || type === 'tick_image') {
         if (!(images[it.id]?.length)) { toast.error(`Please capture image: ${it.title}`); return false; }
       }
+      if (type === 'text') {
+        if (!texts[it.id]?.trim()) { toast.error(`Please answer: ${it.title}`); return false; }
+      }
+      if (type === 'number') {
+        if (numbers[it.id] === undefined || numbers[it.id] === '') { toast.error(`Please enter a number: ${it.title}`); return false; }
+      }
     }
     return true;
   };
@@ -71,7 +79,7 @@ const ChecklistSubmitPage: React.FC = () => {
 
       await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: sub.id, action: 'submitted' });
 
-      // per-item ticks and images
+      // per-item ticks, text, number and images
       for (const it of items as any[]) {
         const type: InputType = (it.input_type ?? 'tick') as InputType;
         if (type === 'tick' || type === 'tick_image') {
@@ -80,6 +88,16 @@ const ChecklistSubmitPage: React.FC = () => {
               submission_id: sub.id, item_id: it.id, answer_json: { value: !!ticks[it.id] },
             });
           }
+        }
+        if (type === 'text' && texts[it.id] !== undefined) {
+          await table('submission_answers').insert({
+            submission_id: sub.id, item_id: it.id, answer_json: { value: texts[it.id] ?? '' },
+          });
+        }
+        if (type === 'number' && numbers[it.id] !== undefined && numbers[it.id] !== '') {
+          await table('submission_answers').insert({
+            submission_id: sub.id, item_id: it.id, answer_json: { value: Number(numbers[it.id]) },
+          });
         }
         const bs = images[it.id] ?? [];
         for (let i = 0; i < bs.length; i++) {
