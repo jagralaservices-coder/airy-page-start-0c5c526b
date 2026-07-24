@@ -95,6 +95,50 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_verification_results: {
+        Row: {
+          categories: Json
+          created_at: string
+          id: string
+          model: string | null
+          overall_score: number | null
+          raw_response: Json | null
+          reason: string | null
+          result: string
+          submission_id: string
+        }
+        Insert: {
+          categories?: Json
+          created_at?: string
+          id?: string
+          model?: string | null
+          overall_score?: number | null
+          raw_response?: Json | null
+          reason?: string | null
+          result?: string
+          submission_id: string
+        }
+        Update: {
+          categories?: Json
+          created_at?: string
+          id?: string
+          model?: string | null
+          overall_score?: number | null
+          raw_response?: Json | null
+          reason?: string | null
+          result?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_verification_results_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           clock_in: string
@@ -895,6 +939,315 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      checklist_activity_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          merchant_id: string | null
+          meta: Json
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          merchant_id?: string | null
+          meta?: Json
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          merchant_id?: string | null
+          meta?: Json
+        }
+        Relationships: []
+      }
+      checklist_assignments: {
+        Row: {
+          assigned_role: string | null
+          assigned_user_id: string | null
+          checklist_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_role?: string | null
+          assigned_user_id?: string | null
+          checklist_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_role?: string | null
+          assigned_user_id?: string | null
+          checklist_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_assignments_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_items: {
+        Row: {
+          ai_verify: boolean
+          answer_type: Database["public"]["Enums"]["checklist_answer_type"]
+          checklist_id: string
+          created_at: string
+          description: string | null
+          gps_required: boolean
+          id: string
+          order_index: number
+          photo_required: boolean
+          required: boolean
+          time_required: boolean
+          title: string
+          updated_at: string
+          video_required: boolean
+        }
+        Insert: {
+          ai_verify?: boolean
+          answer_type?: Database["public"]["Enums"]["checklist_answer_type"]
+          checklist_id: string
+          created_at?: string
+          description?: string | null
+          gps_required?: boolean
+          id?: string
+          order_index?: number
+          photo_required?: boolean
+          required?: boolean
+          time_required?: boolean
+          title: string
+          updated_at?: string
+          video_required?: boolean
+        }
+        Update: {
+          ai_verify?: boolean
+          answer_type?: Database["public"]["Enums"]["checklist_answer_type"]
+          checklist_id?: string
+          created_at?: string
+          description?: string | null
+          gps_required?: boolean
+          id?: string
+          order_index?: number
+          photo_required?: boolean
+          required?: boolean
+          time_required?: boolean
+          title?: string
+          updated_at?: string
+          video_required?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_items_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          merchant_id: string | null
+          payload: Json
+          read_at: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          merchant_id?: string | null
+          payload?: Json
+          read_at?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          merchant_id?: string | null
+          payload?: Json
+          read_at?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      checklist_submissions: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          gps_lat: number | null
+          gps_lng: number | null
+          id: string
+          merchant_id: string
+          overall_score: number | null
+          shift: string | null
+          staff_name: string | null
+          staff_user_id: string
+          status: Database["public"]["Enums"]["checklist_submission_status"]
+          store_id: string | null
+          submitted_at: string
+          updated_at: string
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          merchant_id: string
+          overall_score?: number | null
+          shift?: string | null
+          staff_name?: string | null
+          staff_user_id: string
+          status?: Database["public"]["Enums"]["checklist_submission_status"]
+          store_id?: string | null
+          submitted_at?: string
+          updated_at?: string
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          merchant_id?: string
+          overall_score?: number | null
+          shift?: string | null
+          staff_name?: string | null
+          staff_user_id?: string
+          status?: Database["public"]["Enums"]["checklist_submission_status"]
+          store_id?: string | null
+          submitted_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_submissions_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_templates: {
+        Row: {
+          ai_verify: boolean
+          category: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          photo_required: boolean
+          suggested_answer_type: Database["public"]["Enums"]["checklist_answer_type"]
+          title: string
+        }
+        Insert: {
+          ai_verify?: boolean
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          photo_required?: boolean
+          suggested_answer_type?: Database["public"]["Enums"]["checklist_answer_type"]
+          title: string
+        }
+        Update: {
+          ai_verify?: boolean
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          photo_required?: boolean
+          suggested_answer_type?: Database["public"]["Enums"]["checklist_answer_type"]
+          title?: string
+        }
+        Relationships: []
+      }
+      checklists: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          custom_cron: string | null
+          department: string | null
+          description: string | null
+          frequency: Database["public"]["Enums"]["checklist_frequency"]
+          id: string
+          is_active: boolean
+          merchant_id: string
+          name: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          custom_cron?: string | null
+          department?: string | null
+          description?: string | null
+          frequency?: Database["public"]["Enums"]["checklist_frequency"]
+          id?: string
+          is_active?: boolean
+          merchant_id: string
+          name: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          custom_cron?: string | null
+          department?: string | null
+          description?: string | null
+          frequency?: Database["public"]["Enums"]["checklist_frequency"]
+          id?: string
+          is_active?: boolean
+          merchant_id?: string
+          name?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       cost_centers: {
         Row: {
@@ -3908,6 +4261,41 @@ export type Database = {
           },
         ]
       }
+      owner_reviews: {
+        Row: {
+          created_at: string
+          decision: string
+          id: string
+          notes: string | null
+          reviewer_id: string | null
+          submission_id: string
+        }
+        Insert: {
+          created_at?: string
+          decision: string
+          id?: string
+          notes?: string | null
+          reviewer_id?: string | null
+          submission_id: string
+        }
+        Update: {
+          created_at?: string
+          decision?: string
+          id?: string
+          notes?: string | null
+          reviewer_id?: string | null
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "owner_reviews_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_gateways: {
         Row: {
           created_at: string
@@ -6026,6 +6414,99 @@ export type Database = {
           },
         ]
       }
+      submission_answers: {
+        Row: {
+          answer_json: Json
+          created_at: string
+          id: string
+          item_id: string
+          submission_id: string
+        }
+        Insert: {
+          answer_json?: Json
+          created_at?: string
+          id?: string
+          item_id: string
+          submission_id: string
+        }
+        Update: {
+          answer_json?: Json
+          created_at?: string
+          id?: string
+          item_id?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_answers_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_answers_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      submission_images: {
+        Row: {
+          created_at: string
+          gps_lat: number | null
+          gps_lng: number | null
+          id: string
+          item_id: string | null
+          kind: string
+          storage_path: string
+          submission_id: string
+          taken_at: string
+          thumb_path: string | null
+        }
+        Insert: {
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          item_id?: string | null
+          kind?: string
+          storage_path: string
+          submission_id: string
+          taken_at?: string
+          thumb_path?: string | null
+        }
+        Update: {
+          created_at?: string
+          gps_lat?: number | null
+          gps_lng?: number | null
+          id?: string
+          item_id?: string | null
+          kind?: string
+          storage_path?: string
+          submission_id?: string
+          taken_at?: string
+          thumb_path?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "submission_images_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "submission_images_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_requests: {
         Row: {
           admin_note: string | null
@@ -6401,6 +6882,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      uniform_reference_images: {
+        Row: {
+          created_at: string
+          id: string
+          is_current: boolean
+          kind: Database["public"]["Enums"]["uniform_ref_kind"]
+          merchant_id: string
+          storage_path: string
+          updated_at: string
+          uploaded_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_current?: boolean
+          kind: Database["public"]["Enums"]["uniform_ref_kind"]
+          merchant_id: string
+          storage_path: string
+          updated_at?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_current?: boolean
+          kind?: Database["public"]["Enums"]["uniform_ref_kind"]
+          merchant_id?: string
+          storage_path?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          version?: number
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -8161,6 +8678,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_owner_or_admin: { Args: { _user: string }; Returns: boolean }
       run_gst_audit: {
         Args: {
           p_end_date: string
@@ -8184,6 +8702,18 @@ export type Database = {
         Args: { _merchant_id: string; _user_id: string }
         Returns: boolean
       }
+      user_merchant_ids: {
+        Args: { _user: string }
+        Returns: {
+          merchant_id: string
+        }[]
+      }
+      user_role_names: {
+        Args: { _user: string }
+        Returns: {
+          role: string
+        }[]
+      }
     }
     Enums: {
       app_role:
@@ -8198,6 +8728,28 @@ export type Database = {
         | "accountant"
       batch_status: "ACTIVE" | "EXPIRED" | "QUARANTINE" | "DEPLETED"
       cash_session_status: "open" | "closed"
+      checklist_answer_type:
+        | "yes_no"
+        | "text"
+        | "number"
+        | "photo"
+        | "multi_photo"
+        | "signature"
+        | "video"
+      checklist_frequency:
+        | "daily"
+        | "weekly"
+        | "monthly"
+        | "before_shift"
+        | "after_shift"
+        | "custom"
+        | "once"
+      checklist_submission_status:
+        | "pending"
+        | "ai_pass"
+        | "ai_fail"
+        | "approved"
+        | "rejected"
       cycle_count_frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY"
       grn_status: "DRAFT" | "PARTIAL" | "COMPLETED" | "CANCELLED"
       kot_station: "kitchen" | "bar" | "other"
@@ -8242,6 +8794,15 @@ export type Database = {
       stock_take_status: "DRAFT" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
       subscription_status: "active" | "expired" | "cancelled"
       table_status: "available" | "occupied" | "reserved" | "cleaning"
+      uniform_ref_kind:
+        | "front"
+        | "back"
+        | "side"
+        | "cap"
+        | "apron"
+        | "shoes"
+        | "gloves"
+        | "other"
       warehouse_transfer_status:
         | "REQUESTED"
         | "APPROVED"
@@ -8401,6 +8962,31 @@ export const Constants = {
       ],
       batch_status: ["ACTIVE", "EXPIRED", "QUARANTINE", "DEPLETED"],
       cash_session_status: ["open", "closed"],
+      checklist_answer_type: [
+        "yes_no",
+        "text",
+        "number",
+        "photo",
+        "multi_photo",
+        "signature",
+        "video",
+      ],
+      checklist_frequency: [
+        "daily",
+        "weekly",
+        "monthly",
+        "before_shift",
+        "after_shift",
+        "custom",
+        "once",
+      ],
+      checklist_submission_status: [
+        "pending",
+        "ai_pass",
+        "ai_fail",
+        "approved",
+        "rejected",
+      ],
       cycle_count_frequency: ["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY"],
       grn_status: ["DRAFT", "PARTIAL", "COMPLETED", "CANCELLED"],
       kot_station: ["kitchen", "bar", "other"],
@@ -8444,6 +9030,16 @@ export const Constants = {
       stock_take_status: ["DRAFT", "IN_PROGRESS", "COMPLETED", "CANCELLED"],
       subscription_status: ["active", "expired", "cancelled"],
       table_status: ["available", "occupied", "reserved", "cleaning"],
+      uniform_ref_kind: [
+        "front",
+        "back",
+        "side",
+        "cap",
+        "apron",
+        "shoes",
+        "gloves",
+        "other",
+      ],
       warehouse_transfer_status: [
         "REQUESTED",
         "APPROVED",
