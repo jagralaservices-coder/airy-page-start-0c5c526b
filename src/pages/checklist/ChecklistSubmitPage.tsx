@@ -157,7 +157,7 @@ const ChecklistSubmitPage: React.FC = () => {
             Status: <span className="font-semibold text-foreground capitalize">{submissionStatus.replace('_', ' ')}</span>
           </div>
         )}
-        <AiItemResultPanel items={results} />
+        {results.length > 0 && <AiItemResultPanel items={results} />}
         <Button className="w-full" onClick={() => nav('/staff/checklists')}>Done</Button>
       </div>
     );
@@ -174,6 +174,14 @@ const ChecklistSubmitPage: React.FC = () => {
         const type: InputType = (it.input_type ?? 'tick') as InputType;
         const needsTick = type === 'tick' || type === 'tick_image';
         const needsImage = type === 'image' || type === 'tick_image';
+        const needsText = type === 'text';
+        const needsNumber = type === 'number';
+        const typeLabel =
+          type === 'tick' ? 'Tick only' :
+          type === 'image' ? 'Image only' :
+          type === 'tick_image' ? 'Tick + Image' :
+          type === 'text' ? 'Text answer' :
+          type === 'number' ? 'Number answer' : type;
         return (
           <Card key={it.id} className="rounded-2xl bg-card/60 backdrop-blur">
             <CardHeader>
@@ -181,9 +189,7 @@ const ChecklistSubmitPage: React.FC = () => {
                 {it.title}{it.required && <span className="text-red-500 ml-1">*</span>}
               </CardTitle>
               {it.description && <p className="text-xs text-muted-foreground">{it.description}</p>}
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {type === 'tick' ? 'Tick only' : type === 'image' ? 'Image only' : 'Tick + Image'}
-              </p>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{typeLabel}</p>
             </CardHeader>
             <CardContent className="space-y-3">
               {needsTick && (
@@ -210,6 +216,23 @@ const ChecklistSubmitPage: React.FC = () => {
                   <LiveCameraCapture facing="environment" label="Capture photo" onCapture={(b) => addImg(it.id, b)} />
                   <div className="text-xs text-muted-foreground">{(images[it.id]?.length ?? 0)} photo(s)</div>
                 </>
+              )}
+              {needsText && (
+                <textarea
+                  value={texts[it.id] ?? ''}
+                  onChange={(e) => setTexts(t => ({ ...t, [it.id]: e.target.value }))}
+                  placeholder="Type your answer…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm min-h-[80px]"
+                />
+              )}
+              {needsNumber && (
+                <input
+                  type="number"
+                  value={numbers[it.id] ?? ''}
+                  onChange={(e) => setNumbers(n => ({ ...n, [it.id]: e.target.value }))}
+                  placeholder="Enter a number"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
               )}
             </CardContent>
           </Card>
