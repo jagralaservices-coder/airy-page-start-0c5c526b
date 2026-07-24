@@ -78,6 +78,7 @@ const CategorySummaryPage = lazy(() => import("./pages/reports/CategorySummaryPa
 const ItemSummaryPage = lazy(() => import("./pages/reports/ItemSummaryPage"));
 const SalesSummaryPage = lazy(() => import("./pages/reports/SalesSummaryPage"));
 const OrderSummaryPage = lazy(() => import("./pages/reports/OrderSummaryPage"));
+const CashierReportPage = lazy(() => import("./pages/reports/CashierReportPage"));
 const ExecutiveSalesPage = lazy(() => import("./pages/reports/ExecutiveSalesPage"));
 const EmployeeSummaryPage = lazy(() => import("./pages/reports/EmployeeSummaryPage"));
 const EmployeePerformancePage = lazy(() => import("./pages/reports/EmployeePerformancePage"));
@@ -670,6 +671,9 @@ const AppRoutes = () => {
       } />
       <Route path="/reports/order" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><OrderSummaryPage /></ProtectedRoute>
+      } />
+      <Route path="/reports/cashier" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><CashierReportPage /></ProtectedRoute>
       } />
       <Route path="/reports/executive" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><ExecutiveSalesPage /></ProtectedRoute>

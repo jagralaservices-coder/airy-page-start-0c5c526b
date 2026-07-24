@@ -77,6 +77,7 @@ export const ReportsPage: React.FC = () => {
     { label: 'Item Summary', path: '/reports/item', icon: ShoppingCart },
     { label: 'Sales Summary', path: '/reports/sales', icon: TrendingUp },
     { label: 'Order Summary', path: '/reports/order', icon: ListOrdered, featureKey: 'orderSummaryReport' },
+    { label: '💰 Cashier Report', path: '/reports/cashier', icon: Users },
     { label: 'Executive Sales', path: '/reports/executive', icon: BarChart3, featureKey: 'executiveSaleReport' },
     { label: '👥 Employee Performance', path: '/reports/employee', icon: Users, featureKey: 'employeeSummaryReport' },
     { label: 'Group Summary', path: '/reports/group', icon: Layers, featureKey: 'groupSummaryReport' },

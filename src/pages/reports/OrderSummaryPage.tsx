@@ -52,11 +52,12 @@ const OrderSummaryPage: React.FC = () => {
   };
 
   const handleExport = () => {
-    const headers = ['Order ID', 'Date', 'Type', 'Items', 'Amount', 'Status', 'Payment'];
+    const headers = ['Order ID', 'Date', 'Type', 'Cashier', 'Items', 'Amount', 'Status', 'Payment'];
     const rows = orders.map(o => [
       o.id.slice(-6).toUpperCase(),
       new Date(o.createdAt).toLocaleString(),
       o.orderType,
+      o.cashierName || '—',
       Array.isArray(o.items) ? o.items.length : 0,
       o.total,
       o.status,
@@ -93,10 +94,11 @@ const OrderSummaryPage: React.FC = () => {
           title: 'Recent Orders',
           type: 'table',
           data: {
-            headers: ['Order ID', 'Date', 'Type', 'Amount', 'Status', 'Payment'],
+            headers: ['Order ID', 'Date', 'Cashier', 'Type', 'Amount', 'Status', 'Payment'],
             rows: orders.slice(0, 30).map(o => [
               o.id.slice(-6).toUpperCase(),
               new Date(o.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }),
+              o.cashierName || '—',
               o.orderType,
               formatReportCurrency(o.total),
               o.status,
@@ -172,6 +174,7 @@ const OrderSummaryPage: React.FC = () => {
             <TableRow>
               <TableHead>Order ID</TableHead>
               <TableHead>Date & Time</TableHead>
+              <TableHead>Cashier</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Items</TableHead>
               <TableHead className="text-right">Amount</TableHead>
@@ -182,7 +185,7 @@ const OrderSummaryPage: React.FC = () => {
           <TableBody>
             {orders.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                   {isLoading ? 'Loading orders from database...' : 'No orders available'}
                 </TableCell>
               </TableRow>
@@ -191,6 +194,7 @@ const OrderSummaryPage: React.FC = () => {
                 <TableRow key={order.id}>
                   <TableCell className="font-mono font-medium">#{order.id.slice(-6).toUpperCase()}</TableCell>
                   <TableCell>{new Date(order.createdAt).toLocaleString('en-IN')}</TableCell>
+                  <TableCell>{order.cashierName || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell className="capitalize">{order.orderType}</TableCell>
                   <TableCell className="text-right">{Array.isArray(order.items) ? order.items.length : 0}</TableCell>
                   <TableCell className="text-right font-semibold">{formatCurrency(order.total)}</TableCell>
