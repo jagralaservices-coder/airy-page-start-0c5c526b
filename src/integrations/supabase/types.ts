@@ -5900,6 +5900,7 @@ export type Database = {
           owner_id: string | null
           phone: string | null
           pincode: string | null
+          ref_code: string | null
           region: string | null
           rejected_at: string | null
           rejection_reason: string | null
@@ -5946,6 +5947,7 @@ export type Database = {
           owner_id?: string | null
           phone?: string | null
           pincode?: string | null
+          ref_code?: string | null
           region?: string | null
           rejected_at?: string | null
           rejection_reason?: string | null
@@ -5992,6 +5994,7 @@ export type Database = {
           owner_id?: string | null
           phone?: string | null
           pincode?: string | null
+          ref_code?: string | null
           region?: string | null
           rejected_at?: string | null
           rejection_reason?: string | null
@@ -6414,6 +6417,7 @@ export type Database = {
           password: string | null
           pin: string | null
           pincode: string | null
+          ref_code: string | null
           role: Database["public"]["Enums"]["app_role"]
           salary: number | null
           staff_code: string | null
@@ -6440,6 +6444,7 @@ export type Database = {
           password?: string | null
           pin?: string | null
           pincode?: string | null
+          ref_code?: string | null
           role: Database["public"]["Enums"]["app_role"]
           salary?: number | null
           staff_code?: string | null
@@ -6466,6 +6471,7 @@ export type Database = {
           password?: string | null
           pin?: string | null
           pincode?: string | null
+          ref_code?: string | null
           role?: Database["public"]["Enums"]["app_role"]
           salary?: number | null
           staff_code?: string | null
