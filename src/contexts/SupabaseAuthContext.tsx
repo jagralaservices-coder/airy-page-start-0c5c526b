@@ -3,7 +3,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { logSecurityAction } from '@/lib/auditLogger';
 
-export type UserRole = 'super_admin' | 'admin' | 'owner' | 'store_manager' | 'staff' | 'cashier';
+export type UserRole = 'super_admin' | 'admin' | 'owner' | 'merchant' | 'store_manager' | 'staff' | 'cashier';
 
 export interface UserRoleData {
   id: string;
@@ -191,6 +191,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         super_admin: 0,
         admin: 1,
         owner: 2,
+        merchant: 2,
         store_manager: 3,
         staff: 4,
         cashier: 9,
@@ -734,6 +735,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         super_admin: 0,
         admin: 1,
         owner: 2,
+        merchant: 2,
         store_manager: 3,
         staff: 4,
         cashier: 9,
@@ -881,7 +883,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
     return hasRole(['super_admin']);
   };
   const isAdmin = () => hasRole(['admin', 'super_admin']);
-  const isOwner = () => hasRole(['owner']);
+  const isOwner = () => hasRole(['owner', 'merchant']);
   const isStoreManager = () => hasRole(['store_manager']);
   const isStaff = () => hasRole(['staff']);
   const isCashier = () => hasRole(['cashier']);

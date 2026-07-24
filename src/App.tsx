@@ -293,7 +293,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   }
 
   // Check role-based access (only for Supabase auth)
-  if (allowedRoles && (!userRole || !allowedRoles.includes(userRole.role)) && !isImpersonating) {
+  const hasAllowedRole = !!userRole && (
+    allowedRoles?.includes(userRole.role) ||
+    (userRole.role === 'merchant' && allowedRoles?.includes('owner'))
+  );
+
+  if (allowedRoles && (!hasAllowedRole) && !isImpersonating) {
     // If store login is active, allow access
     if (isStoreLogin && activeStore) {
       return renderWithGate(<MainLayout>{children}</MainLayout>);
@@ -346,6 +351,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         case 'admin':
           return <Navigate to="/admin/dashboard" replace />;
         case 'owner':
+        case 'merchant':
           return <Navigate to="/dashboard" replace />;
         case 'store_manager':
         case 'cashier':
@@ -443,29 +449,29 @@ const AppRoutes = () => {
       
       {/* Protected Routes - Owner & Store Manager */}
       <Route path="/dashboard" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><DashboardPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><DashboardPage /></ProtectedRoute>
       } />
       <Route path="/pos" element={<ProtectedRoute allowedRoles={['store_manager', 'cashier']} allowStoreLogin={true} allowStaffLogin={true}><CashierBillingPage /></ProtectedRoute>} />
       <Route path="/cashiers" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><CashierManagementPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><CashierManagementPage /></ProtectedRoute>
       } />
       <Route path="/cashiers/dashboard" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><CashierDashboardPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><CashierDashboardPage /></ProtectedRoute>
       } />
       <Route path="/tables" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><FeatureGuard featureKey="tableManagement"><TablesManagementPage /></FeatureGuard></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><FeatureGuard featureKey="tableManagement"><TablesManagementPage /></FeatureGuard></ProtectedRoute>
       } />
       <Route path="/orders" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><OrdersManagementPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><OrdersManagementPage /></ProtectedRoute>
       } />
       <Route path="/kitchen" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><KitchenDisplayPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><KitchenDisplayPage /></ProtectedRoute>
       } />
       <Route path="/inventory" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><InventoryPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><InventoryPage /></ProtectedRoute>
       } />
       <Route path="/reports" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><ReportsPage /></ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><ReportsPage /></ProtectedRoute>
       } />
       <Route path="/reports/payment-methods" element={
         <ProtectedRoute allowedRoles={['cashier', 'store_manager', 'owner', 'admin', 'super_admin']} allowStoreLogin><PaymentMethodsPage /></ProtectedRoute>
