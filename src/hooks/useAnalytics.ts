@@ -113,6 +113,8 @@ const dbToLocalOrder = (dbOrder: any): Order => ({
   cancelReason: dbOrder.cancel_reason || undefined,
   cancelledAt: dbOrder.cancelled_at || undefined,
   storeId: dbOrder.store_id,
+  cashierId: dbOrder.cashier_id || undefined,
+  cashierName: dbOrder.cashier_name || undefined,
 });
 
 // Get store_id from localStorage for store login mode
