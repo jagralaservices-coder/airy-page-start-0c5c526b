@@ -97,19 +97,28 @@ serve(async (req) => {
       )
     }
     
-    const { data: roleData, error: roleError } = await supabaseAdmin
+    const { data: roleRows, error: roleError } = await supabaseAdmin
       .from('user_roles')
-      .select('role, customer_id')
+      .select('role, customer_id, merchant_id, is_active')
       .eq('user_id', user.id)
-      .in('role', ['admin', 'owner', 'super_admin'])
-      .eq('is_active', true)
-      .maybeSingle()
+      .in('role', ['admin', 'owner', 'super_admin', 'merchant'])
+
+    const activeRoles = (roleRows || []).filter((r: any) =>
+      r.is_active === true || r.is_active === null || r.is_active === undefined
+    )
+    const priority: Record<string, number> = { super_admin: 1, admin: 2, owner: 3, merchant: 3 }
+    activeRoles.sort((a: any, b: any) => (priority[a.role] ?? 99) - (priority[b.role] ?? 99))
+    const roleData: any = activeRoles[0]
 
     if (roleError || !roleData) {
+      console.error('Role check failed:', { userId: user.id, roleError, roleRows })
       return new Response(
         JSON.stringify({ error: 'Forbidden: Only administrators or owners can create staff accounts' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+    if (!roleData.customer_id && roleData.merchant_id) {
+      roleData.customer_id = roleData.merchant_id
     }
     
     const effectiveCustomerId = customer_id || roleData.customer_id
