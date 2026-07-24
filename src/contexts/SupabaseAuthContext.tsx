@@ -681,7 +681,16 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         password: finalPassword,
       });
 
-      if (error) {
+      // Supabase JS returns AuthWeakPasswordError (name === 'AuthWeakPasswordError')
+      // with a valid session when HIBP/leaked-password protection flags the password.
+      // Treat that as a successful sign-in (session is present) instead of failing.
+      const isWeakPasswordWarning =
+        !!error &&
+        (((error as any).name === 'AuthWeakPasswordError') ||
+          ((error as any).code === 'weak_password')) &&
+        !!authData?.session;
+
+      if (error && !isWeakPasswordWarning) {
         if (error.message.includes('Invalid login credentials')) {
           return { error: 'Invalid email or password. Please try again.' };
         }
