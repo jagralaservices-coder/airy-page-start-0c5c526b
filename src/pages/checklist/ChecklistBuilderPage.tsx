@@ -259,15 +259,25 @@ const ChecklistBuilderPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground">Category</label>
+            <label className="text-xs text-muted-foreground">Shift</label>
             <select
               className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm"
               value={checklist.category ?? ''}
-              onChange={e => setChecklist({ ...checklist, category: e.target.value })}
+              onChange={e => setChecklist({ ...checklist, category: e.target.value, shift_time: e.target.value ? (checklist.shift_time ?? '') : null })}
             >
-              <option value="">Select category…</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              <option value="">No shift</option>
+              {SHIFTS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+            {!!checklist.category && SHIFTS.includes(checklist.category) && (
+              <div className="mt-2">
+                <label className="text-xs text-muted-foreground">Shift Time</label>
+                <Input
+                  type="time"
+                  value={checklist.shift_time ?? ''}
+                  onChange={e => setChecklist({ ...checklist, shift_time: e.target.value })}
+                />
+              </div>
+            )}
           </div>
 
           <div>
@@ -291,9 +301,9 @@ const ChecklistBuilderPage: React.FC = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground">Frequency</label>
-            <select className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm" value={checklist.frequency} onChange={e => setChecklist({ ...checklist, frequency: e.target.value })}>
-              {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
+            <label className="text-xs text-muted-foreground">Schedule Type</label>
+            <select className="w-full border border-border bg-background rounded-md px-3 py-2 text-sm" value={checklist.frequency ?? 'daily'} onChange={e => setChecklist({ ...checklist, frequency: e.target.value })}>
+              {SCHEDULES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
             </select>
           </div>
 
