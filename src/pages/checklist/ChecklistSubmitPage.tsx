@@ -102,8 +102,12 @@ const ChecklistSubmitPage: React.FC = () => {
         })));
       }
 
-      const hasImages = (items as any[]).some(it => (it.input_type === 'image' || it.input_type === 'tick_image'));
-      if (hasImages) {
+      // Only run AI when at least one item has BOTH an image response type AND ai_verify=true.
+      // Otherwise the checklist has no AI component and we save responses only.
+      const aiItems = (items as any[]).filter(it =>
+        (it.input_type === 'image' || it.input_type === 'tick_image') && it.ai_verify === true
+      );
+      if (aiItems.length > 0) {
         toast.info('Running AI verification…');
         const { data: verifyRes, error: vErr } = await supabase.functions.invoke('verify-checklist-submission', {
           body: { submission_id: sub.id },
@@ -117,7 +121,7 @@ const ChecklistSubmitPage: React.FC = () => {
       } else {
         setResults([]);
         setSubmissionStatus('pending');
-        toast.success('Submitted. No image items to verify.');
+        toast.success('Submitted.');
       }
     } catch (e: any) {
       toast.error(e.message ?? 'Submission failed');
