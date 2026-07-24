@@ -157,6 +157,12 @@ const ChecklistBuilderPage: React.FC = () => {
   const saveAll = async () => {
     if (!id || !merchantId || !user?.id) return;
     if (!checklist?.name?.trim()) { toast.error('Checklist name is required'); return; }
+    const shiftType: string = checklist.shift_type ?? '';
+    const needsTime = SHIFTS_WITH_TIME.includes(shiftType);
+    if (needsTime && (!checklist.shift_start_time || !checklist.shift_end_time)) {
+      toast.error('Start Time and End Time are required for this shift');
+      return;
+    }
     setSaving(true);
     try {
       const dept = deptMode === 'Custom' ? customDepartment.trim() : deptMode;
@@ -164,8 +170,10 @@ const ChecklistBuilderPage: React.FC = () => {
         name: checklist.name.trim(),
         description: checklist.description ?? '',
         department: dept ?? '',
-        category: checklist.category ?? '',
-        shift_time: checklist.shift_time ?? null,
+        category: shiftType,
+        shift_type: shiftType || null,
+        shift_start_time: needsTime ? (checklist.shift_start_time || null) : null,
+        shift_end_time: needsTime ? (checklist.shift_end_time || null) : null,
         frequency: checklist.frequency ?? 'daily',
         is_active: !!checklist.is_active,
       }).eq('id', id);
