@@ -244,7 +244,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   // Check for staff login session
   const staffSession = typeof window !== 'undefined' ? localStorage.getItem('pos_staff_session') : null;
   const isStaffLoggedIn = !!staffSession;
-  const hasAuthenticatedStaffRole = isAuthenticated && userRole?.role === 'staff';
+  const hasAuthenticatedStaffRole = isAuthenticated && !!userRole?.role && ['staff', 'store_manager', 'cashier'].includes(userRole.role);
   
   // Helper to wrap component with BackupRestoreGate if storeId is resolved
   const renderWithGate = (content: React.ReactNode) => {
@@ -275,6 +275,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; allowedRoles?: strin
   if (isStaffOnlyRoute) {
     if (isStaffLoggedIn || hasAuthenticatedStaffRole) {
       return renderWithGate(<MainLayout>{children}</MainLayout>);
+    }
+    if (isLoading) {
+      return <LoadingSpinner />;
     }
     // No staff session - redirect to staff login
     try { localStorage.removeItem('pos_last_path'); } catch (e) {}
@@ -604,13 +607,13 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['super_admin','admin','owner','store_manager']} allowStoreLogin><ChecklistBuilderPage /></ProtectedRoute>
       } />
       <Route path="/staff/checklists" element={
-        <ProtectedRoute><StaffChecklistsPage /></ProtectedRoute>
+        <ProtectedRoute allowStaffLogin><StaffChecklistsPage /></ProtectedRoute>
       } />
       <Route path="/staff/checklists/:id" element={
-        <ProtectedRoute><ChecklistSubmitPage /></ProtectedRoute>
+        <ProtectedRoute allowStaffLogin><ChecklistSubmitPage /></ProtectedRoute>
       } />
       <Route path="/staff/checklists/history/:id" element={
-        <ProtectedRoute><StaffChecklistHistoryPage /></ProtectedRoute>
+        <ProtectedRoute allowStaffLogin><StaffChecklistHistoryPage /></ProtectedRoute>
       } />
 
       <Route path="/settings" element={

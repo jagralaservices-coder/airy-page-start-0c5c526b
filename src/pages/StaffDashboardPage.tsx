@@ -385,23 +385,27 @@ const StaffDashboardPage: React.FC = () => {
     let userId: string | null = null;
     
     if (supabaseStaff) {
-      const parsed = JSON.parse(supabaseStaff);
-      userId = parsed.user_id || parsed.auth_user_id || parsed.id;
-      staffData = {
-        id: parsed.user_id || parsed.auth_user_id || parsed.id,
-        auth_user_id: parsed.user_id || parsed.auth_user_id || parsed.id,
-        staff_role_id: parsed.staff_role_id || parsed.role_id || undefined,
-        merchant_id: parsed.merchant_id,
-        customer_id: parsed.customer_id,
-        name: parsed.name || parsed.full_name || 'Staff',
-        role: parsed.role || 'staff',
-        phone: parsed.phone || '',
-        store_id: parsed.store_id
-      };
+      try {
+        const parsed = JSON.parse(supabaseStaff);
+        userId = parsed.user_id || parsed.auth_user_id || parsed.id;
+        staffData = {
+          id: parsed.user_id || parsed.auth_user_id || parsed.id,
+          auth_user_id: parsed.user_id || parsed.auth_user_id || parsed.id,
+          staff_role_id: parsed.staff_role_id || parsed.role_id || undefined,
+          merchant_id: parsed.merchant_id,
+          customer_id: parsed.customer_id,
+          name: parsed.name || parsed.full_name || 'Staff',
+          role: parsed.role || 'staff',
+          phone: parsed.phone || '',
+          store_id: parsed.store_id
+        };
+      } catch {
+        localStorage.removeItem('pos_staff_session');
+      }
     }
     
     if (!staffData) {
-      navigate('/auth');
+      navigate('/auth', { replace: true });
       return;
     }
 

@@ -180,6 +180,22 @@ const AuthPage: React.FC = () => {
     return false;
   };
 
+  const clearBrowserAuthForStaffSession = async () => {
+    try { await supabase.auth.signOut({ scope: 'local' } as any); }
+    catch (_) { try { await supabase.auth.signOut(); } catch (_) {} }
+    localStorage.removeItem('pos_session_active');
+    localStorage.removeItem('pos_session_backup');
+    localStorage.removeItem('pos_user_backup');
+    localStorage.removeItem('pos_user_role_backup');
+    localStorage.removeItem('pos_customer_backup');
+    localStorage.removeItem('pos_store_backup');
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+  };
+
   useEffect(() => {
     if (!loginSuccess || !isAuthenticated) return;
     if (userRole) {
@@ -208,7 +224,7 @@ const AuthPage: React.FC = () => {
             });
 
             if (!staffError && staffData?.success) {
-              await hydrateStaffAuthSession(staffData, trimmedPassword);
+              await clearBrowserAuthForStaffSession();
               applyStaffFunctionSession(staffData, staffData.email || `${trimmedEmail}@maxora.local`);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
@@ -313,7 +329,7 @@ const AuthPage: React.FC = () => {
             });
 
             if (!staffError && staffData?.success) {
-              await hydrateStaffAuthSession(staffData, trimmedPassword);
+              await clearBrowserAuthForStaffSession();
               applyStaffFunctionSession(staffData, trimmedEmail);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
