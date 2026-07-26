@@ -8,7 +8,6 @@ import {
   Phone,
   Shield,
   CheckCircle,
-  XCircle,
   Trash2,
   Edit2,
   Eye,
@@ -714,29 +713,6 @@ const StaffSettingsPage: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const toggleStaffStatus = async (id: string) => {
-    const staff = staffList.find(s => s.id === id);
-    if (!staff) return;
-
-    try {
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ is_active: !staff.isActive })
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      fetchStaff();
-    } catch (error) {
-      console.error('Error toggling staff status:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to update staff status',
-        variant: 'destructive'
-      });
     }
   };
 
