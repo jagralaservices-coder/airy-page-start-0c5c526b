@@ -71,6 +71,60 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
       }
 
       if (authError) {
+        const { data: staffData, error: staffError } = await supabase.functions.invoke('staff-login', {
+          body: {
+            email: trimmedEmail,
+            password: trimmedPassword,
+            store_id: storeId,
+          },
+        });
+
+        if (!staffError && staffData?.success) {
+          localStorage.setItem('pos_active_store_data', JSON.stringify({
+            id: staffData.store_id,
+            storeId: staffData.store_id,
+            storeName: staffData.store_name,
+            storeAddress: staffData.store_address,
+            storePhone: staffData.store_phone,
+            customerId: staffData.customer_id,
+            customer_id: staffData.customer_id,
+            merchant_id: staffData.merchant_id || staffData.customer_id,
+            storeCode: staffData.store_code,
+          }));
+
+          const activeStaff: ActiveStaff = {
+            id: staffData.staff_role_id || staffData.role_id,
+            user_id: staffData.user_id,
+            name: staffData.name || 'Staff',
+            staffCode: staffData.staff_code || '',
+            role: staffData.role,
+            store_id: staffData.store_id || storeId,
+          };
+
+          localStorage.setItem('pos_staff_session', JSON.stringify({
+            id: activeStaff.user_id,
+            user_id: activeStaff.user_id,
+            auth_user_id: activeStaff.user_id,
+            staff_role_id: activeStaff.id,
+            role_id: activeStaff.id,
+            name: activeStaff.name,
+            email: staffData.email || trimmedEmail,
+            role: activeStaff.role,
+            store_id: activeStaff.store_id,
+            customer_id: staffData.customer_id || null,
+            merchant_id: staffData.merchant_id || staffData.customer_id || null,
+            staff_code: activeStaff.staffCode,
+          }));
+
+          window.dispatchEvent(new CustomEvent('pos:active-store-changed'));
+          onStaffLogin(activeStaff);
+          toast.success(`Welcome, ${activeStaff.name}!`);
+          setEmail('');
+          setPassword('');
+          onClose();
+          return;
+        }
+
         toast.error(authError.message.includes('Invalid login') 
           ? 'Invalid email or password' 
           : authError.message);
