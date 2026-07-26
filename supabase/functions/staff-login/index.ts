@@ -199,31 +199,28 @@ serve(async (req) => {
         )
       }
 
-      let resolvedStaffCode = sanitizedCode
-      if (!/^[0-9]{8}$/.test(sanitizedCode)) {
-        const { data: roleLookup } = await supabaseAdmin
-          .from('user_roles')
-          .select('staff_code, ref_code')
-          .eq('ref_code', sanitizedCode)
-          .eq('is_active', true)
-          .maybeSingle()
+      const { data: roleRows, error: roleLookupError } = await supabaseAdmin
+        .from('user_roles')
+        .select('id, user_id, role, store_id, customer_id, merchant_id, staff_code, ref_code, pin, is_active, created_at')
+        .or(`staff_code.eq.${sanitizedCode},ref_code.eq.${sanitizedCode}`)
+        .in('role', ['staff', 'store_manager', 'cashier'])
 
-        if (!roleLookup?.staff_code) {
-          await supabaseAdmin.rpc('log_login_attempt', {
-            p_identifier: sanitizedCode, p_type: 'staff', p_success: false, p_ip: clientIp
-          })
-          return new Response(
-            JSON.stringify({ error: 'Invalid Staff ID or PIN' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-        resolvedStaffCode = roleLookup.staff_code
+      const isActiveStatus = (value: unknown) => {
+        if (value === false) return false
+        if (value === true || value === null || value === undefined) return true
+        return ['true', '1', 'active', 'enabled', 'approved'].includes(String(value).toLowerCase().trim())
       }
 
-      const { data: staffData, error: staffError } = await supabaseAdmin
-        .rpc('verify_staff_pin', { p_staff_code: resolvedStaffCode, p_pin: sanitizedPin })
+      const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 }
+      const roleData = (roleRows || [])
+        .filter((row: any) => isActiveStatus(row.is_active))
+        .filter((row: any) => String(row.pin || '').trim() === sanitizedPin)
+        .sort((a: any, b: any) =>
+          (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99) ||
+          String(b.created_at || '').localeCompare(String(a.created_at || ''))
+        )[0]
 
-      if (staffError || !staffData || staffData.length === 0) {
+      if (roleLookupError || !roleData?.user_id) {
         await supabaseAdmin.rpc('log_login_attempt', {
           p_identifier: sanitizedCode, p_type: 'staff', p_success: false, p_ip: clientIp
         })
@@ -233,16 +230,15 @@ serve(async (req) => {
         )
       }
 
-      const staff = staffData[0]
-      const { data: userData } = await supabaseAdmin.auth.admin.getUserById(staff.user_id)
+      const { data: userData } = await supabaseAdmin.auth.admin.getUserById(roleData.user_id)
       const staffEmail = userData?.user?.email || ''
       const staffName = userData?.user?.user_metadata?.full_name || 'Staff'
 
-      const { data: storeData } = staff.store_id
+      const { data: storeData } = roleData.store_id
         ? await supabaseAdmin
             .from('stores')
             .select('id, name, outlet_code, address, phone, customer_id, merchant_id')
-            .eq('id', staff.store_id)
+            .eq('id', roleData.store_id)
             .maybeSingle()
         : { data: null }
 
@@ -253,20 +249,21 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: true,
-          user_id: staff.user_id,
-          staff_role_id: staff.id,
-          role_id: staff.id,
+          user_id: roleData.user_id,
+          staff_role_id: roleData.id,
+          role_id: roleData.id,
           email: staffEmail,
           name: staffName,
-          role: staff.role,
-          store_id: staff.store_id,
-          customer_id: staff.customer_id,
-          staff_code: resolvedStaffCode,
+          role: roleData.role,
+          store_id: roleData.store_id,
+          customer_id: roleData.customer_id,
+          staff_code: roleData.staff_code,
+          ref_code: roleData.ref_code,
           store_name: storeData?.name || null,
           store_address: storeData?.address || null,
           store_phone: storeData?.phone || null,
           store_code: storeData?.outlet_code || null,
-          merchant_id: storeData?.merchant_id || staff.customer_id || null,
+          merchant_id: storeData?.merchant_id || roleData.merchant_id || roleData.customer_id || null,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
