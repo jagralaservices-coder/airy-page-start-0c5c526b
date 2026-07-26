@@ -14,6 +14,7 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     })
@@ -54,21 +55,75 @@ serve(async (req) => {
         )
       }
 
-      // Verify the user has an active staff/store_manager role
-      const { data: roleData, error: roleError } = await supabaseAdmin
+      // Verify the supplied password/PIN. Older staff records store the operator
+      // PIN in user_roles.pin while Auth password may have been created with a
+      // compatibility suffix; accept all known formats so existing staff can log in.
+      const passwordValue = String(password).trim()
+      const passwordAttempts = Array.from(new Set([
+        passwordValue,
+        /^\d+$/.test(passwordValue) ? `${passwordValue}Aa@1` : '',
+        /^\d+$/.test(passwordValue) ? `${passwordValue}#MaxoraPOS!26@Auth` : '',
+      ].filter(Boolean)))
+
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+        auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false }
+      })
+
+      let authPasswordValid = false
+      for (const candidate of passwordAttempts) {
+        const { error: signInError } = await authClient.auth.signInWithPassword({
+          email: normalizedEmail,
+          password: candidate,
+        })
+        if (!signInError) {
+          authPasswordValid = true
+          try { await authClient.auth.signOut() } catch (_) { /* noop */ }
+          break
+        }
+      }
+
+      // Verify the user has an active staff/store_manager role. Use an array and
+      // choose deterministically because legacy duplicate rows can make maybeSingle fail.
+      const { data: roleRows, error: roleError } = await supabaseAdmin
         .from('user_roles')
-        .select('id, user_id, role, store_id, customer_id, staff_code, ref_code')
+        .select('id, user_id, role, store_id, customer_id, merchant_id, staff_code, ref_code, pin, is_active, created_at')
         .eq('user_id', foundUser.id)
         .eq('is_active', true)
         .in('role', ['staff', 'store_manager', 'cashier'])
-        .maybeSingle()
 
-      if (roleError || !roleData) {
+      if (roleError || !roleRows || roleRows.length === 0) {
         await supabaseAdmin.rpc('log_login_attempt', {
           p_identifier: normalizedEmail, p_type: 'staff', p_success: false, p_ip: clientIp
         })
         return new Response(
           JSON.stringify({ error: 'No active staff account found for this email' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 }
+      const sortedRoles = (roleRows || []).slice().sort((a: any, b: any) =>
+        (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99) ||
+        String(b.created_at || '').localeCompare(String(a.created_at || ''))
+      )
+      const roleData = (store_id
+        ? sortedRoles.find((r: any) => r.store_id === store_id)
+        : sortedRoles[0]) as any
+
+      if (!roleData) {
+        return new Response(
+          JSON.stringify({ error: 'This account is not linked to this store' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const pinMatches = String(roleData.pin || '').trim() === passwordValue
+      if (!authPasswordValid && !pinMatches) {
+        await supabaseAdmin.rpc('log_login_attempt', {
+          p_identifier: normalizedEmail, p_type: 'staff', p_success: false, p_ip: clientIp
+        })
+        return new Response(
+          JSON.stringify({ error: 'Invalid email or password' }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }

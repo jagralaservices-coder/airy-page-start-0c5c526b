@@ -51,13 +51,80 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
 
     setIsLoading(true);
     try {
-      // Sign in with email + password via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password: trimmedPassword,
-      });
+      const passwordAttempts = Array.from(new Set([
+        trimmedPassword,
+        /^\d+$/.test(trimmedPassword) ? `${trimmedPassword}Aa@1` : '',
+        /^\d+$/.test(trimmedPassword) ? `${trimmedPassword}#MaxoraPOS!26@Auth` : '',
+      ].filter(Boolean)));
+
+      let authData: any = null;
+      let authError: any = null;
+
+      for (const candidate of passwordAttempts) {
+        const result = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: candidate,
+        });
+        authData = result.data;
+        authError = result.error;
+        if (!authError && authData?.user) break;
+      }
 
       if (authError) {
+        const { data: staffData, error: staffError } = await supabase.functions.invoke('staff-login', {
+          body: {
+            email: trimmedEmail,
+            password: trimmedPassword,
+            store_id: storeId,
+          },
+        });
+
+        if (!staffError && staffData?.success) {
+          localStorage.setItem('pos_active_store_data', JSON.stringify({
+            id: staffData.store_id,
+            storeId: staffData.store_id,
+            storeName: staffData.store_name,
+            storeAddress: staffData.store_address,
+            storePhone: staffData.store_phone,
+            customerId: staffData.customer_id,
+            customer_id: staffData.customer_id,
+            merchant_id: staffData.merchant_id || staffData.customer_id,
+            storeCode: staffData.store_code,
+          }));
+
+          const activeStaff: ActiveStaff = {
+            id: staffData.staff_role_id || staffData.role_id,
+            user_id: staffData.user_id,
+            name: staffData.name || 'Staff',
+            staffCode: staffData.staff_code || '',
+            role: staffData.role,
+            store_id: staffData.store_id || storeId,
+          };
+
+          localStorage.setItem('pos_staff_session', JSON.stringify({
+            id: activeStaff.user_id,
+            user_id: activeStaff.user_id,
+            auth_user_id: activeStaff.user_id,
+            staff_role_id: activeStaff.id,
+            role_id: activeStaff.id,
+            name: activeStaff.name,
+            email: staffData.email || trimmedEmail,
+            role: activeStaff.role,
+            store_id: activeStaff.store_id,
+            customer_id: staffData.customer_id || null,
+            merchant_id: staffData.merchant_id || staffData.customer_id || null,
+            staff_code: activeStaff.staffCode,
+          }));
+
+          window.dispatchEvent(new CustomEvent('pos:active-store-changed'));
+          onStaffLogin(activeStaff);
+          toast.success(`Welcome, ${activeStaff.name}!`);
+          setEmail('');
+          setPassword('');
+          onClose();
+          return;
+        }
+
         toast.error(authError.message.includes('Invalid login') 
           ? 'Invalid email or password' 
           : authError.message);
@@ -70,13 +137,18 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
       }
 
       // Verify user has staff role for this store
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleRows, error: roleError } = await supabase
         .from('user_roles')
         .select('*')
         .eq('user_id', authData.user.id)
         .eq('is_active', true)
         .in('role', ['staff', 'store_manager', 'cashier'])
-        .maybeSingle();
+        .order('created_at', { ascending: false });
+
+      const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 };
+      const roleData = (roleRows || [])
+        .filter((row: any) => row.store_id === storeId)
+        .sort((a: any, b: any) => (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99))[0];
 
       if (roleError || !roleData) {
         toast.error('No active staff account found for this email');
