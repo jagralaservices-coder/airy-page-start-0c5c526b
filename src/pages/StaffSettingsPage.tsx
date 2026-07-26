@@ -257,6 +257,18 @@ const StaffSettingsPage: React.FC = () => {
     return null;
   };
 
+  const getStoreCode = () => {
+    try {
+      const activeStore = localStorage.getItem('pos_active_store_data');
+      if (activeStore) return JSON.parse(activeStore).storeCode || JSON.parse(activeStore).store_code || null;
+      const storeLogin = localStorage.getItem('store_login');
+      if (storeLogin) return JSON.parse(storeLogin).store_code || null;
+    } catch {
+      return null;
+    }
+    return null;
+  };
+
   // Face capture handlers
   const handleFaceCapture = useCallback((blob: Blob) => {
     setFacePhotoBlob(blob);
@@ -428,6 +440,7 @@ const StaffSettingsPage: React.FC = () => {
 
       // Filter out auto-generated store login accounts
       mappedStaff = mappedStaff.filter(s => !(s.email && s.email.startsWith('store_') && s.email.endsWith('@pos.local')));
+      mappedStaff = mappedStaff.filter(s => s.isActive !== false);
       setStaffList(mappedStaff);
     } catch (error) {
       console.error('Error fetching staff:', error);
@@ -606,18 +619,26 @@ const StaffSettingsPage: React.FC = () => {
   const handleDeleteStaff = async (id: string) => {
     const staff = staffList.find(s => s.id === id);
     if (!staff) return;
+    if (!confirm(`Delete ${staff.name}? This will permanently remove the staff login.`)) return;
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.functions.invoke('delete-staff', {
-        body: { role_id: id }
+      const { data, error } = await supabase.functions.invoke('delete-staff', {
+        body: {
+          role_id: id,
+          staff_id: id,
+          store_login_id: getStoreId() || undefined,
+          store_code: getStoreCode() || undefined
+        }
       });
 
-      if (error) throw error;
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Failed to delete staff');
+
+      setStaffList(prev => prev.filter(s => s.id !== id));
 
       toast({
-        title: 'Staff Removed',
-        description: `${staff.name} has been removed`,
+        title: 'Staff Deleted',
+        description: `${staff.name} has been permanently deleted`,
       });
       
       fetchStaff();
@@ -922,14 +943,11 @@ const StaffSettingsPage: React.FC = () => {
                     <Button 
                       variant="ghost" 
                       size="icon"
-                      onClick={() => toggleStaffStatus(staff.id)}
+                      onClick={() => handleDeleteStaff(staff.id)}
                       disabled={isLoading}
+                      title="Delete Staff"
                     >
-                      {staff.isActive ? (
-                        <XCircle className="w-4 h-4 text-warning" />
-                      ) : (
-                        <CheckCircle className="w-4 h-4 text-success" />
-                      )}
+                      <Trash2 className="w-4 h-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
