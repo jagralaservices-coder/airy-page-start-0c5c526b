@@ -115,6 +115,49 @@ const AuthPage: React.FC = () => {
 
   const isStoreIdentifier = (value: string) => /^[0-9A-F]{8}$/i.test(value.trim()) || /^STR[0-9]{5}$/i.test(value.trim());
 
+  const applyStaffFunctionSession = (data: any, fallbackEmail: string) => {
+    localStorage.setItem('pos_active_store_data', JSON.stringify({
+      id: data.store_id,
+      storeId: data.store_id,
+      storeName: data.store_name,
+      storeAddress: data.store_address,
+      storePhone: data.store_phone,
+      customerId: data.customer_id,
+      customer_id: data.customer_id,
+      merchant_id: data.merchant_id || data.customer_id,
+      storeCode: data.store_code,
+    }));
+
+    const staffSession = {
+      id: data.user_id,
+      user_id: data.user_id,
+      auth_user_id: data.user_id,
+      staff_role_id: data.staff_role_id || data.role_id,
+      role_id: data.staff_role_id || data.role_id,
+      name: data.name || 'Staff',
+      email: data.email || fallbackEmail,
+      role: data.role,
+      store_id: data.store_id,
+      store_name: data.store_name,
+      customer_id: data.customer_id,
+      merchant_id: data.merchant_id || data.customer_id,
+      staff_code: data.staff_code || null,
+    };
+
+    localStorage.setItem('pos_staff_session', JSON.stringify(staffSession));
+    localStorage.setItem('logged_in_staff', JSON.stringify({
+      id: data.user_id,
+      staff_role_id: data.staff_role_id || data.role_id,
+      name: staffSession.name,
+      role: data.role,
+      phone: data.store_phone || '',
+      store_id: data.store_id,
+      customer_id: data.customer_id,
+      merchant_id: data.merchant_id || data.customer_id,
+    }));
+    window.dispatchEvent(new CustomEvent('pos:active-store-changed'));
+  };
+
   useEffect(() => {
     if (!loginSuccess || !isAuthenticated) return;
     if (userRole) {
@@ -224,6 +267,22 @@ const AuthPage: React.FC = () => {
       }
       
       if (error) {
+        if (trimmedEmail.includes('@') && /^\d+$/.test(trimmedPassword)) {
+          try {
+            const { data: staffData, error: staffError } = await supabase.functions.invoke('staff-login', {
+              body: { email: trimmedEmail.toLowerCase(), password: trimmedPassword }
+            });
+
+            if (!staffError && staffData?.success) {
+              applyStaffFunctionSession(staffData, trimmedEmail);
+              setIsLoading(false);
+              toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
+              redirectByRole(staffData.role || 'staff');
+              return;
+            }
+          } catch (_) { /* keep normal auth error below */ }
+        }
+
         setIsLoading(false);
         if (/suspend/i.test(error)) {
           navigate('/account-suspended', { replace: true });

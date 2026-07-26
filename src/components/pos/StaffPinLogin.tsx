@@ -51,11 +51,24 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
 
     setIsLoading(true);
     try {
-      // Sign in with email + password via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: trimmedEmail,
-        password: trimmedPassword,
-      });
+      const passwordAttempts = Array.from(new Set([
+        trimmedPassword,
+        /^\d+$/.test(trimmedPassword) ? `${trimmedPassword}Aa@1` : '',
+        /^\d+$/.test(trimmedPassword) ? `${trimmedPassword}#MaxoraPOS!26@Auth` : '',
+      ].filter(Boolean)));
+
+      let authData: any = null;
+      let authError: any = null;
+
+      for (const candidate of passwordAttempts) {
+        const result = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: candidate,
+        });
+        authData = result.data;
+        authError = result.error;
+        if (!authError && authData?.user) break;
+      }
 
       if (authError) {
         toast.error(authError.message.includes('Invalid login') 
@@ -70,13 +83,18 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
       }
 
       // Verify user has staff role for this store
-      const { data: roleData, error: roleError } = await supabase
+      const { data: roleRows, error: roleError } = await supabase
         .from('user_roles')
         .select('*')
         .eq('user_id', authData.user.id)
         .eq('is_active', true)
         .in('role', ['staff', 'store_manager', 'cashier'])
-        .maybeSingle();
+        .order('created_at', { ascending: false });
+
+      const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 };
+      const roleData = (roleRows || [])
+        .filter((row: any) => row.store_id === storeId)
+        .sort((a: any, b: any) => (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99))[0];
 
       if (roleError || !roleData) {
         toast.error('No active staff account found for this email');

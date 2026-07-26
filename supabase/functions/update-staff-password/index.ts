@@ -36,14 +36,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'user_id and pin are required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Check if caller is super_admin, admin, or owner
+    // Check if caller is super_admin, admin, owner, or merchant
     const { data: roles } = await supabaseAdmin
       .from('user_roles')
-      .select('role, customer_id')
+      .select('role, customer_id, merchant_id')
       .eq('user_id', user.id)
       .eq('is_active', true)
 
-    const isAllowed = (roles || []).some(r => ['super_admin', 'admin', 'owner'].includes(r.role))
+    const isAllowed = (roles || []).some(r => ['super_admin', 'admin', 'owner', 'merchant'].includes(r.role))
     if (!isAllowed) {
       return new Response(JSON.stringify({ error: 'Forbidden: Insufficient privileges to update staff passwords' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
