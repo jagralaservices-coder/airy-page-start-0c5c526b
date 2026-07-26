@@ -8824,6 +8824,15 @@ export type Database = {
           role: string
         }[]
       }
+      verify_staff_pin: {
+        Args: { p_pin: string; p_staff_code: string }
+        Returns: {
+          customer_id: string
+          role: string
+          store_id: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role:
