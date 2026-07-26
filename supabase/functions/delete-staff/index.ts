@@ -102,21 +102,46 @@ serve(async (req) => {
       )
     }
 
-    console.log('Deleting staff:', targetId)
+    console.log('Deleting staff (full purge):', targetId, 'user:', staffData.user_id)
 
-    // Delete user_role
+    const userIdToPurge = staffData.user_id
+
+    // Delete dependent rows first to avoid FK violations that would otherwise
+    // make the delete look like a soft "inactive" flip in the UI.
+    if (userIdToPurge) {
+      // staff_attendance references staff.id; delete staff row cascades? Be explicit.
+      const { data: staffRows } = await supabaseAdmin
+        .from('staff')
+        .select('id')
+        .or(`user_id.eq.${userIdToPurge},profile_id.eq.${userIdToPurge}`)
+      const staffIds = (staffRows || []).map((r: any) => r.id).filter(Boolean)
+      if (staffIds.length > 0) {
+        await supabaseAdmin.from('staff_attendance').delete().in('staff_id', staffIds)
+        await supabaseAdmin.from('staff').delete().in('id', staffIds)
+      }
+    }
+
+    // Delete ALL user_roles rows for this user (handle_new_user trigger auto-creates
+    // an extra 'cashier' row, so deleting only the targeted role_id leaves the
+    // person visible in the list — hard-delete every role for this user_id).
     const { error: deleteRoleError } = await supabaseAdmin
-      .from('user_roles').delete().eq('id', targetId)
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userIdToPurge)
 
     if (deleteRoleError) {
+      console.error('Failed to delete user_roles:', deleteRoleError)
       return new Response(
-        JSON.stringify({ error: 'Failed to delete staff' }),
+        JSON.stringify({ error: `Failed to delete staff: ${deleteRoleError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
+    // Delete profile row (best-effort)
+    await supabaseAdmin.from('profiles').delete().eq('id', userIdToPurge)
+
     // Also delete the auth user
-    const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(staffData.user_id)
+    const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(userIdToPurge)
     if (deleteAuthError) {
       console.error('Error deleting auth user:', deleteAuthError)
     }
