@@ -117,6 +117,7 @@ serve(async (req) => {
       .from('user_roles')
       .select('id, user_id, role, store_id, customer_id, is_active, staff_code, face_photo_url, work_start_time, work_end_time, fingerprint_enabled, salary, created_at')
       .eq('store_id', store_id)
+      .eq('is_active', true)
       .in('role', ['store_manager', 'staff'])
 
     if (staffError) {
