@@ -72,6 +72,14 @@ const clearStoredAuthTokens = () => {
   }
 };
 
+const hasLocalStaffSession = () => {
+  try {
+    return !!localStorage.getItem('pos_staff_session') || localStorage.getItem('pos_staff_login_mode') === 'true';
+  } catch {
+    return false;
+  }
+};
+
 export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -471,6 +479,16 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
     const applySession = (nextSession: Session | null) => {
       if (!isMounted) return;
 
+      if (hasLocalStaffSession()) {
+        clearStoredAuthTokens();
+        dropSessionBackups();
+        setSession(null);
+        setUser(null);
+        clearRoleState();
+        setIsLoading(false);
+        return;
+      }
+
       let finalSession = nextSession;
       let finalUser = nextSession?.user ?? null;
 
@@ -554,6 +572,16 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
           return;
         }
 
+        if (hasLocalStaffSession()) {
+          clearStoredAuthTokens();
+          dropSessionBackups();
+          setSession(null);
+          setUser(null);
+          clearRoleState();
+          setIsLoading(false);
+          return;
+        }
+
         const sessionActive = localStorage.getItem('pos_session_active') === 'true';
         if (event === 'SIGNED_OUT' && (sessionActive || localStorage.getItem('pos_login_as_demo') === 'true')) {
           console.log('[Auth] Prevented automatic sign out event');
@@ -569,6 +597,19 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
     );
 
+
+    if (hasLocalStaffSession()) {
+      clearStoredAuthTokens();
+      dropSessionBackups();
+      setSession(null);
+      setUser(null);
+      clearRoleState();
+      setIsLoading(false);
+      return () => {
+        isMounted = false;
+        subscription.unsubscribe();
+      };
+    }
 
     void supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
@@ -842,6 +883,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
     }
 
     localStorage.removeItem('pos_login_as_demo');
+    localStorage.removeItem('pos_staff_login_mode');
     localStorage.removeItem('pos_session_active');
     // Clear all cached backups on explicit logout
     localStorage.removeItem('pos_session_backup');

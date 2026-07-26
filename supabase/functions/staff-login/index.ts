@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const isActiveStatus = (value: unknown) => {
+  if (value === false) return false
+  if (value === true || value === null || value === undefined) return true
+  return ['true', '1', 'active', 'enabled', 'approved'].includes(String(value).toLowerCase().trim())
+}
+
+const pinCandidatesFor = (value: string) => Array.from(new Set([
+  value,
+  value.endsWith('Aa@1') ? value.slice(0, -4) : '',
+  value.endsWith('#MaxoraPOS!26@Auth') ? value.slice(0, -18) : '',
+].filter(Boolean)))
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -88,10 +100,11 @@ serve(async (req) => {
         .from('user_roles')
         .select('id, user_id, role, store_id, customer_id, merchant_id, staff_code, ref_code, pin, is_active, created_at')
         .eq('user_id', foundUser.id)
-        .eq('is_active', true)
         .in('role', ['staff', 'store_manager', 'cashier'])
 
-      if (roleError || !roleRows || roleRows.length === 0) {
+      const activeEmailRoleRows = (roleRows || []).filter((row: any) => isActiveStatus(row.is_active))
+
+      if (roleError || activeEmailRoleRows.length === 0) {
         await supabaseAdmin.rpc('log_login_attempt', {
           p_identifier: normalizedEmail, p_type: 'staff', p_success: false, p_ip: clientIp
         })
@@ -102,7 +115,7 @@ serve(async (req) => {
       }
 
       const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 }
-      const sortedRoles = (roleRows || []).slice().sort((a: any, b: any) =>
+      const sortedRoles = activeEmailRoleRows.slice().sort((a: any, b: any) =>
         (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99) ||
         String(b.created_at || '').localeCompare(String(a.created_at || ''))
       )
@@ -117,7 +130,23 @@ serve(async (req) => {
         )
       }
 
-      const pinMatches = String(roleData.pin || '').trim() === passwordValue
+      let pinMatches = pinCandidatesFor(passwordValue).some((candidate) => String(roleData.pin || '').trim() === candidate)
+
+      if (!pinMatches) {
+        for (const code of [roleData.staff_code, roleData.ref_code].filter(Boolean)) {
+          for (const candidate of pinCandidatesFor(passwordValue)) {
+            const { data: verifiedRows } = await supabaseAdmin
+              .rpc('verify_staff_pin', { p_staff_code: code, p_pin: candidate })
+            const verified = Array.isArray(verifiedRows) ? verifiedRows[0] : null
+            if (verified?.user_id === roleData.user_id) {
+              pinMatches = true
+              break
+            }
+          }
+          if (pinMatches) break
+        }
+      }
+
       if (!authPasswordValid && !pinMatches) {
         await supabaseAdmin.rpc('log_login_attempt', {
           p_identifier: normalizedEmail, p_type: 'staff', p_success: false, p_ip: clientIp
@@ -205,12 +234,6 @@ serve(async (req) => {
         .or(`staff_code.eq.${sanitizedCode},ref_code.eq.${sanitizedCode}`)
         .in('role', ['staff', 'store_manager', 'cashier'])
 
-      const isActiveStatus = (value: unknown) => {
-        if (value === false) return false
-        if (value === true || value === null || value === undefined) return true
-        return ['true', '1', 'active', 'enabled', 'approved'].includes(String(value).toLowerCase().trim())
-      }
-
       const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 }
       const activeRoleRows = (roleRows || [])
         .filter((row: any) => isActiveStatus(row.is_active))
@@ -219,18 +242,23 @@ serve(async (req) => {
           String(b.created_at || '').localeCompare(String(a.created_at || ''))
         )
 
-      let roleData = activeRoleRows.find((row: any) => String(row.pin || '').trim() === sanitizedPin)
+      let roleData = activeRoleRows.find((row: any) => pinCandidatesFor(sanitizedPin).some((candidate) => String(row.pin || '').trim() === candidate))
 
       if (!roleData) {
         for (const row of activeRoleRows as any[]) {
-          if (!row.staff_code) continue
-          const { data: verifiedRows } = await supabaseAdmin
-            .rpc('verify_staff_pin', { p_staff_code: row.staff_code, p_pin: sanitizedPin })
-          const verified = Array.isArray(verifiedRows) ? verifiedRows[0] : null
-          if (verified?.user_id === row.user_id) {
-            roleData = row
-            break
+          for (const code of [sanitizedCode, row.staff_code, row.ref_code].filter(Boolean)) {
+            for (const candidate of pinCandidatesFor(sanitizedPin)) {
+              const { data: verifiedRows } = await supabaseAdmin
+                .rpc('verify_staff_pin', { p_staff_code: code, p_pin: candidate })
+              const verified = Array.isArray(verifiedRows) ? verifiedRows[0] : null
+              if (verified?.user_id === row.user_id) {
+                roleData = row
+                break
+              }
+            }
+            if (roleData) break
           }
+          if (roleData) break
         }
       }
 

@@ -146,6 +146,7 @@ const AuthPage: React.FC = () => {
     };
 
     localStorage.setItem('pos_staff_session', JSON.stringify(staffSession));
+    localStorage.setItem('pos_staff_login_mode', 'true');
     localStorage.setItem('logged_in_staff', JSON.stringify({
       id: data.user_id,
       staff_role_id: data.staff_role_id || data.role_id,
@@ -157,6 +158,16 @@ const AuthPage: React.FC = () => {
       merchant_id: data.merchant_id || data.customer_id,
     }));
     window.dispatchEvent(new CustomEvent('pos:active-store-changed'));
+  };
+
+  const goToStaffDashboard = () => {
+    setTimeout(() => {
+      try {
+        window.location.replace('/staff-dashboard');
+      } catch (_) {
+        navigate('/staff-dashboard', { replace: true });
+      }
+    }, 80);
   };
 
   const hydrateStaffAuthSession = async (staffData: any, rawPassword: string) => {
@@ -181,14 +192,19 @@ const AuthPage: React.FC = () => {
   };
 
   const clearBrowserAuthForStaffSession = async () => {
-    try { await supabase.auth.signOut({ scope: 'local' } as any); }
-    catch (_) { try { await supabase.auth.signOut(); } catch (_) {} }
+    localStorage.setItem('pos_staff_login_mode', 'true');
     localStorage.removeItem('pos_session_active');
     localStorage.removeItem('pos_session_backup');
     localStorage.removeItem('pos_user_backup');
     localStorage.removeItem('pos_user_role_backup');
     localStorage.removeItem('pos_customer_backup');
     localStorage.removeItem('pos_store_backup');
+    Object.keys(localStorage).forEach((key) => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+    try { await supabase.auth.signOut({ scope: 'local' } as any); } catch (_) {}
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
         localStorage.removeItem(key);
@@ -218,6 +234,7 @@ const AuthPage: React.FC = () => {
     try {
       if (!trimmedEmail.includes('@')) {
         if (isStaffIdentifier(trimmedEmail)) {
+          let staffAttemptError = 'Invalid Staff ID or PIN';
           try {
             const { data: staffData, error: staffError } = await supabase.functions.invoke('staff-login', {
               body: { staff_code: trimmedEmail, password: trimmedPassword }
@@ -228,10 +245,28 @@ const AuthPage: React.FC = () => {
               applyStaffFunctionSession(staffData, staffData.email || `${trimmedEmail}@maxora.local`);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
-              navigate('/staff-dashboard', { replace: true });
+              goToStaffDashboard();
               return;
             }
-          } catch (_) { /* continue with normal store/cashier login */ }
+            staffAttemptError = staffData?.error || staffError?.message || staffAttemptError;
+          } catch (error: any) {
+            staffAttemptError = error?.message || staffAttemptError;
+          }
+
+          if (isStoreIdentifier(trimmedEmail)) {
+            const store = await withTimeout(loginStore(trimmedEmail, trimmedPassword), 8000);
+            setIsLoading(false);
+            if (store) {
+              toast({ title: 'Login successful', description: `Welcome ${store.name}` });
+              navigate('/pos', { replace: true });
+              return;
+            }
+          }
+
+          setIsLoading(false);
+          setLoginErrorMsg(staffAttemptError);
+          toast({ title: t('auth.loginFailed'), description: staffAttemptError, variant: 'destructive' });
+          return;
         }
 
         // Store ID/code login must take priority over cashier username login.
@@ -333,7 +368,7 @@ const AuthPage: React.FC = () => {
               applyStaffFunctionSession(staffData, trimmedEmail);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
-              redirectByRole(staffData.role || 'staff');
+              goToStaffDashboard();
               return;
             }
           } catch (_) { /* keep normal auth error below */ }
