@@ -224,10 +224,7 @@ const AuthPage: React.FC = () => {
             });
 
             if (!staffError && staffData?.success) {
-              const hydrated = await hydrateStaffAuthSession(staffData, trimmedPassword);
-              if (!hydrated) {
-                await clearBrowserAuthForStaffSession();
-              }
+              await clearBrowserAuthForStaffSession();
               applyStaffFunctionSession(staffData, staffData.email || `${trimmedEmail}@maxora.local`);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
@@ -332,10 +329,7 @@ const AuthPage: React.FC = () => {
             });
 
             if (!staffError && staffData?.success) {
-              const hydrated = await hydrateStaffAuthSession(staffData, trimmedPassword);
-              if (!hydrated) {
-                await clearBrowserAuthForStaffSession();
-              }
+              await clearBrowserAuthForStaffSession();
               applyStaffFunctionSession(staffData, trimmedEmail);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
