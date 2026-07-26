@@ -114,6 +114,7 @@ const AuthPage: React.FC = () => {
   };
 
   const isStoreIdentifier = (value: string) => /^[0-9A-F]{8}$/i.test(value.trim()) || /^STR[0-9]{5}$/i.test(value.trim());
+  const isStaffIdentifier = (value: string) => /^[0-9]{8}$/.test(value.trim()) || /^(STF|MGR|CSH)[0-9]{5}$/i.test(value.trim());
 
   const applyStaffFunctionSession = (data: any, fallbackEmail: string) => {
     localStorage.setItem('pos_active_store_data', JSON.stringify({
@@ -158,6 +159,27 @@ const AuthPage: React.FC = () => {
     window.dispatchEvent(new CustomEvent('pos:active-store-changed'));
   };
 
+  const hydrateStaffAuthSession = async (staffData: any, rawPassword: string) => {
+    const staffEmail = String(staffData?.email || '').trim().toLowerCase();
+    if (!staffEmail) return false;
+
+    const passwordValue = rawPassword.trim();
+    const candidates = Array.from(new Set([
+      passwordValue,
+      /^\d+$/.test(passwordValue) ? `${passwordValue}Aa@1` : '',
+      /^\d+$/.test(passwordValue) ? `${passwordValue}#MaxoraPOS!26@Auth` : '',
+    ].filter(Boolean)));
+
+    for (const candidate of candidates) {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: staffEmail,
+        password: candidate,
+      });
+      if (!error && data?.session) return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
     if (!loginSuccess || !isAuthenticated) return;
     if (userRole) {
@@ -179,6 +201,23 @@ const AuthPage: React.FC = () => {
     setIsLoading(true);
     try {
       if (!trimmedEmail.includes('@')) {
+        if (isStaffIdentifier(trimmedEmail)) {
+          try {
+            const { data: staffData, error: staffError } = await supabase.functions.invoke('staff-login', {
+              body: { staff_code: trimmedEmail, password: trimmedPassword }
+            });
+
+            if (!staffError && staffData?.success) {
+              await hydrateStaffAuthSession(staffData, trimmedPassword);
+              applyStaffFunctionSession(staffData, staffData.email || `${trimmedEmail}@maxora.local`);
+              setIsLoading(false);
+              toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
+              navigate('/staff-dashboard', { replace: true });
+              return;
+            }
+          } catch (_) { /* continue with normal store/cashier login */ }
+        }
+
         // Store ID/code login must take priority over cashier username login.
         // Android WebView was trying `<storeId>@maxora.local` first, which could
         // show cashier-login errors or delay the real store login path.
@@ -274,6 +313,7 @@ const AuthPage: React.FC = () => {
             });
 
             if (!staffError && staffData?.success) {
+              await hydrateStaffAuthSession(staffData, trimmedPassword);
               applyStaffFunctionSession(staffData, trimmedEmail);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
