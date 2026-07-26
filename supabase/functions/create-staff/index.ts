@@ -392,9 +392,20 @@ serve(async (req) => {
     // Create user role
     const plainPin = staffPin
     const plainPassword = password
+    const intendedRole = role || 'staff'
+
+    // Remove any stray auto-created roles for this user that don't match the intended role.
+    // (handle_new_user trigger auto-inserts a 'cashier' row for every new auth user,
+    // which was causing duplicate rows and delete/login bugs.)
+    await supabaseAdmin
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .neq('role', intendedRole)
+
     const { data: newRole, error: roleInsertError } = await supabaseAdmin.from('user_roles').upsert({
       user_id: userId,
-      role: role || 'staff',
+      role: intendedRole,
       customer_id: effectiveCustomerId,
       merchant_id: effectiveCustomerId,
       store_id,
