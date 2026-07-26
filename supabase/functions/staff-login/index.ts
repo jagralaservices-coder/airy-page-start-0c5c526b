@@ -178,7 +178,7 @@ serve(async (req) => {
       const sanitizedCode = staff_code.trim().toUpperCase()
       const sanitizedPin = password.trim()
 
-      const isValidCode = /^[0-9]{8}$/.test(sanitizedCode) || /^(STF|MGR)[0-9]{5}$/i.test(sanitizedCode)
+      const isValidCode = /^[0-9]{8}$/.test(sanitizedCode) || /^(STF|MGR|CSH)[0-9]{5}$/i.test(sanitizedCode)
       if (!isValidCode) {
         return new Response(
           JSON.stringify({ error: 'Invalid Staff ID format' }),
@@ -212,13 +212,27 @@ serve(async (req) => {
       }
 
       const rolePriority: Record<string, number> = { store_manager: 1, staff: 2, cashier: 3 }
-      const roleData = (roleRows || [])
+      const activeRoleRows = (roleRows || [])
         .filter((row: any) => isActiveStatus(row.is_active))
-        .filter((row: any) => String(row.pin || '').trim() === sanitizedPin)
         .sort((a: any, b: any) =>
           (rolePriority[a.role] ?? 99) - (rolePriority[b.role] ?? 99) ||
           String(b.created_at || '').localeCompare(String(a.created_at || ''))
-        )[0]
+        )
+
+      let roleData = activeRoleRows.find((row: any) => String(row.pin || '').trim() === sanitizedPin)
+
+      if (!roleData) {
+        for (const row of activeRoleRows as any[]) {
+          if (!row.staff_code) continue
+          const { data: verifiedRows } = await supabaseAdmin
+            .rpc('verify_staff_pin', { p_staff_code: row.staff_code, p_pin: sanitizedPin })
+          const verified = Array.isArray(verifiedRows) ? verifiedRows[0] : null
+          if (verified?.user_id === row.user_id) {
+            roleData = row
+            break
+          }
+        }
+      }
 
       if (roleLookupError || !roleData?.user_id) {
         await supabaseAdmin.rpc('log_login_attempt', {
