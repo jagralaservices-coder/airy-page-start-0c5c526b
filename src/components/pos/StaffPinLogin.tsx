@@ -152,14 +152,12 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
 
       if (roleError || !roleData) {
         toast.error('No active staff account found for this email');
-        await supabase.auth.signOut();
         return;
       }
 
       // Verify store match
       if (roleData.store_id !== storeId) {
         toast.error('This account is not linked to this store');
-        await supabase.auth.signOut();
         return;
       }
 

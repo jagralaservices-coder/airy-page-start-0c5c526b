@@ -404,7 +404,22 @@ const StaffDashboardPage: React.FC = () => {
       }
     }
     
+    if (!staffData && userRole && ['staff', 'store_manager', 'cashier'].includes(userRole.role)) {
+      staffData = {
+        id: userRole.user_id,
+        auth_user_id: userRole.user_id,
+        staff_role_id: userRole.id,
+        merchant_id: userRole.merchant_id || userRole.customer_id || undefined,
+        customer_id: userRole.customer_id || userRole.merchant_id || undefined,
+        name: 'Staff',
+        role: userRole.role,
+        phone: '',
+        store_id: userRole.store_id || undefined,
+      };
+    }
+
     if (!staffData) {
+      console.warn('[STAFF_AUTH] REDIRECT DASHBOARD src/pages/StaffDashboardPage.tsx:421', { blocked: true, reason: 'missing_staff_session' });
       navigate('/auth', { replace: true });
       return;
     }
