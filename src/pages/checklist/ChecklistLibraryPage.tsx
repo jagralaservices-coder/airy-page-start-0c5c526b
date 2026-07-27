@@ -97,8 +97,8 @@ const ChecklistLibraryPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
-          <Button onClick={createNew} disabled={creating}>
-            <Plus className="h-4 w-4 mr-1" /> {creating ? 'Creating…' : 'New checklist'}
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> New checklist
           </Button>
         </div>
       </div>
@@ -116,7 +116,7 @@ const ChecklistLibraryPage: React.FC = () => {
           <CardContent className="p-10 text-center space-y-3">
             <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="text-muted-foreground">No checklists yet.</p>
-            <Button onClick={createNew} disabled={creating}>
+            <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-1" /> New checklist
             </Button>
           </CardContent>
@@ -146,6 +146,8 @@ const ChecklistLibraryPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      <NewChecklistDialog open={dialogOpen} onOpenChange={setDialogOpen} onCreate={createNew} />
     </div>
   );
 };
