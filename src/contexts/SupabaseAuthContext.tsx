@@ -364,6 +364,15 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
                 approvalStatus: (storeData as any).approval_status,
                 condition: 'isStatusSuspended(storeData.is_active, storeData.approval_status)'
               });
+              if (['staff', 'store_manager', 'cashier'].includes(roleRecord.role)) {
+                console.warn('[STAFF_AUTH] STORE FOUND src/contexts/SupabaseAuthContext.tsx:367', {
+                  userId,
+                  storeId: roleRecord.store_id,
+                  suspended: true,
+                });
+                setUserRole(roleRecord);
+                return roleRecord;
+              }
               await markAccountSuspended();
               return null;
             }
@@ -623,19 +632,14 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
           return;
         }
 
-        if (hasLocalStaffSession()) {
-          clearStoredAuthTokens();
-          dropSessionBackups();
-          setSession(null);
-          setUser(null);
-          clearRoleState();
-          setIsLoading(false);
-          return;
-        }
-
         const sessionActive = localStorage.getItem('pos_session_active') === 'true';
         if (event === 'SIGNED_OUT' && (sessionActive || hasLocalStaffSession() || localStorage.getItem('pos_login_as_demo') === 'true')) {
           console.warn('[STAFF_AUTH] AUTO LOGOUT TRIGGERED src/contexts/SupabaseAuthContext.tsx:600', { prevented: true, event });
+          return;
+        }
+
+        if (hasLocalStaffSession() && !nextSession) {
+          setIsLoading(false);
           return;
         }
 

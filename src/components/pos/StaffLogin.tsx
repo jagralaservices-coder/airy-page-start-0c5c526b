@@ -41,6 +41,14 @@ export const StaffLogin: React.FC<StaffLoginProps> = ({ isOpen, onClose, onLogin
       if (data?.error) throw new Error(data.error);
       if (!data?.success) throw new Error('Login failed');
 
+      if (data?.session?.access_token && data?.session?.refresh_token) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (sessionError) throw sessionError;
+      }
+
       // Populate legacy store data in localStorage to preserve other state references
       localStorage.setItem('pos_active_store_data', JSON.stringify({
         id: data.store_id,
