@@ -5,7 +5,7 @@ import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 
 export type ChecklistFrequency = 'daily' | 'weekly' | 'monthly' | 'before_shift' | 'after_shift' | 'custom' | 'once';
 export type ChecklistAnswerType = 'yes_no' | 'text' | 'number' | 'photo' | 'multi_photo' | 'signature' | 'video';
-export type SubmissionStatus = 'pending' | 'ai_pass' | 'ai_fail' | 'approved' | 'rejected';
+export type SubmissionStatus = 'pending' | 'ai_pass' | 'ai_fail' | 'approved' | 'rejected' | 'review_required';
 
 export interface Checklist {
   id: string;
@@ -161,6 +161,43 @@ export function useNotifications() {
   });
 }
 
+export function useLatestSubmission(checklistId?: string | null) {
+  const { user } = useSupabaseAuth();
+  return useQuery({
+    queryKey: ['latest_submission', checklistId, user?.id],
+    enabled: !!checklistId && !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await table('checklist_submissions')
+        .select('*')
+        .eq('checklist_id', checklistId!)
+        .eq('staff_user_id', user!.id)
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+  });
+}
+
+export function usePendingReuploads() {
+  const { user } = useSupabaseAuth();
+  return useQuery({
+    queryKey: ['pending_reuploads', user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data, error } = await table('checklist_submissions')
+        .select('id, checklist_id, reupload_item_ids, reupload_requested_at, review_notes, status')
+        .eq('staff_user_id', user!.id)
+        .not('reupload_item_ids', 'eq', '{}')
+        .order('reupload_requested_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return (data ?? []).filter((r: any) => Array.isArray(r.reupload_item_ids) && r.reupload_item_ids.length > 0);
+    },
+  });
+}
+
 export function useInvalidateChecklists() {
   const qc = useQueryClient();
   return () => {
@@ -168,6 +205,8 @@ export function useInvalidateChecklists() {
     qc.invalidateQueries({ queryKey: ['checklist_items'] });
     qc.invalidateQueries({ queryKey: ['checklist_assignments'] });
     qc.invalidateQueries({ queryKey: ['checklist_submissions'] });
+    qc.invalidateQueries({ queryKey: ['latest_submission'] });
+    qc.invalidateQueries({ queryKey: ['pending_reuploads'] });
   };
 }
 
