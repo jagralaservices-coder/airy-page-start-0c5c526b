@@ -135,12 +135,20 @@ Deno.serve(async (req) => {
 
     const { data: submission, error: sErr } = await admin
       .from('checklist_submissions')
-      .select('id, merchant_id, staff_user_id, checklist_id, staff_name')
+      .select('id, merchant_id, staff_user_id, checklist_id, staff_name, reupload_item_ids')
       .eq('id', submissionId)
       .maybeSingle();
     if (sErr || !submission) {
       return new Response(JSON.stringify({ error: 'Submission not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    // Confidence threshold from the checklist (default 75)
+    const { data: checklistRow } = await admin
+      .from('checklists')
+      .select('ai_confidence_threshold')
+      .eq('id', submission.checklist_id)
+      .maybeSingle();
+    const threshold = Math.max(0, Math.min(100, Number((checklistRow as any)?.ai_confidence_threshold ?? 75)));
 
     // Load checklist items that require image AND have AI verification explicitly enabled.
     // AI is dynamic: it only runs on items the owner opted in.
