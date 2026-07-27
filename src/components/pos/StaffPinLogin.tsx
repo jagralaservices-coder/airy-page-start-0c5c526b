@@ -80,6 +80,14 @@ export const StaffPinLogin: React.FC<StaffPinLoginProps> = ({
         });
 
         if (!staffError && staffData?.success) {
+          if (staffData?.session?.access_token && staffData?.session?.refresh_token) {
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: staffData.session.access_token,
+              refresh_token: staffData.session.refresh_token,
+            });
+            if (sessionError) throw sessionError;
+          }
+
           localStorage.setItem('pos_active_store_data', JSON.stringify({
             id: staffData.store_id,
             storeId: staffData.store_id,
