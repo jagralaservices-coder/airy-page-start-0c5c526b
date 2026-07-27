@@ -174,10 +174,15 @@ const AuthPage: React.FC = () => {
   const goToStaffDashboard = () => {
     setTimeout(() => {
       try {
-        window.location.replace('/staff-dashboard');
-      } catch (_) {
         navigate('/staff-dashboard', { replace: true });
+      } catch (_) {
+        try { window.location.replace('/staff-dashboard'); } catch (e) {}
       }
+      setTimeout(() => {
+        if (window.location.pathname === '/auth') {
+          try { window.location.replace('/staff-dashboard'); } catch (_) {}
+        }
+      }, 500);
     }, 80);
   };
 
@@ -224,6 +229,7 @@ const AuthPage: React.FC = () => {
     localStorage.removeItem('pos_staff_login_mode');
     localStorage.removeItem('pos_staff_session');
     localStorage.removeItem('logged_in_staff');
+    localStorage.removeItem('pos_account_suspended');
     localStorage.removeItem('pos_session_active');
     localStorage.removeItem('pos_session_backup');
     localStorage.removeItem('pos_user_backup');
