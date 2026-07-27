@@ -234,7 +234,7 @@ export const OperationsPage: React.FC = () => {
   // Sort operations by saved order
   const savedOpsOrder = getOperationsOrder();
   const sortedOperations = useMemo(() => {
-    const pinnedOrder = ['dashboard', 'payment-gateway'];
+    const pinnedOrder = ['dashboard', 'payment-gateway', 'checklists'];
     const byPinnedPosition = (id: string) => pinnedOrder.indexOf(id);
     return [...operations].sort((a, b) => {
       const aPinned = byPinnedPosition(a.id);
