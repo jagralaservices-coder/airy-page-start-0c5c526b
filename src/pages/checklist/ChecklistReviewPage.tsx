@@ -8,9 +8,10 @@ import { useMerchant } from '@/contexts/MerchantContext';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemResultPanel';
 import { ImageCompareViewer } from '@/components/checklist/ImageCompareViewer';
+import { RequestReuploadDialog, ReuploadItem } from '@/components/checklist/RequestReuploadDialog';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, RefreshCw, Lock } from 'lucide-react';
 
 const table = (n: string) => supabase.from(n as any);
 
@@ -30,7 +31,8 @@ const ChecklistReviewPage: React.FC = () => {
   const [itemsByChecklist, setItemsByChecklist] = useState<Record<string, ItemInfo[]>>({});
   const [answersBySub, setAnswersBySub] = useState<Record<string, Record<string, any>>>({});
   const [compare, setCompare] = useState<{ ref: string[]; sub: string[] } | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'ai_fail' | 'approved' | 'rejected'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'review_required' | 'ai_fail' | 'approved' | 'rejected'>('all');
+  const [reupload, setReupload] = useState<{ sub: any; items: ReuploadItem[] } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -99,7 +101,12 @@ const ChecklistReviewPage: React.FC = () => {
   const review = async (s: any, decision: 'approved' | 'rejected', notes?: string) => {
     if (!user?.id || !merchantId) return;
     await table('owner_reviews').insert({ submission_id: s.id, reviewer_id: user.id, decision, notes });
-    await table('checklist_submissions').update({ status: decision }).eq('id', s.id);
+    await table('checklist_submissions').update({
+      status: decision,
+      review_notes: notes ?? null,
+      approved_by: decision === 'approved' ? user.id : null,
+      reupload_item_ids: [],
+    }).eq('id', s.id);
     await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: s.id, action: decision });
     await table('checklist_notifications').insert({
       user_id: s.staff_user_id, merchant_id: merchantId, kind: decision,
@@ -107,6 +114,26 @@ const ChecklistReviewPage: React.FC = () => {
       payload: { submission_id: s.id },
     });
     toast.success(`Marked ${decision}`);
+    qc.invalidateQueries({ queryKey: ['checklist_submissions'] });
+  };
+
+  const requestReupload = async (s: any, itemIds: string[], notes: string) => {
+    if (!user?.id || !merchantId) return;
+    await table('owner_reviews').insert({ submission_id: s.id, reviewer_id: user.id, decision: 'request_reupload', notes });
+    await table('checklist_submissions').update({
+      status: 'pending',
+      reupload_item_ids: itemIds,
+      reupload_requested_at: new Date().toISOString(),
+      reupload_requested_by: user.id,
+      review_notes: notes || null,
+    }).eq('id', s.id);
+    await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: s.id, action: 'reupload_requested', meta: { itemIds } });
+    await table('checklist_notifications').insert({
+      user_id: s.staff_user_id, merchant_id: merchantId, kind: 'reupload_requested',
+      title: 'Re-upload requested', body: notes || 'Please redo the flagged items.',
+      payload: { submission_id: s.id, item_ids: itemIds },
+    });
+    toast.success('Re-upload requested');
     qc.invalidateQueries({ queryKey: ['checklist_submissions'] });
   };
 

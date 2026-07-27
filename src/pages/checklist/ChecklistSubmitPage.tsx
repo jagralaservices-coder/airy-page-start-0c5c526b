@@ -1,19 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Send, Camera, MapPin, Check } from 'lucide-react';
+import { ArrowLeft, Send, Camera, MapPin, Check, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { useMerchant } from '@/contexts/MerchantContext';
 import { useStore } from '@/contexts/StoreContext';
-import { useChecklistItems, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
+import { useChecklistItems, useLatestSubmission, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
 import { LiveCameraCapture } from '@/components/checklist/LiveCameraCapture';
 import { toast } from 'sonner';
 import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemResultPanel';
 
 const table = (n: string) => supabase.from(n as any);
-
 type InputType = 'tick' | 'image' | 'tick_image' | 'text' | 'number';
 
 const ChecklistSubmitPage: React.FC = () => {
@@ -23,6 +23,7 @@ const ChecklistSubmitPage: React.FC = () => {
   const { merchantId } = useMerchant();
   const store = useStore();
   const { data: items = [] } = useChecklistItems(id);
+  const { data: latest, refetch: refetchLatest } = useLatestSubmission(id);
 
   const [ticks, setTicks] = useState<Record<string, boolean>>({});
   const [images, setImages] = useState<Record<string, Blob[]>>({});
@@ -32,6 +33,18 @@ const ChecklistSubmitPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<AiItemResult[] | null>(null);
   const [submissionStatus, setSubmissionStatus] = useState<string | null>(null);
+
+  const reuploadIds: string[] = useMemo(
+    () => Array.isArray(latest?.reupload_item_ids) ? latest.reupload_item_ids as string[] : [],
+    [latest]
+  );
+  const isReuploadMode = reuploadIds.length > 0 && !latest?.locked;
+  const isLockedReadOnly = !!latest?.locked && !isReuploadMode;
+
+  const visibleItems = useMemo(() => {
+    if (isReuploadMode) return (items as any[]).filter(it => reuploadIds.includes(it.id));
+    return items as any[];
+  }, [items, isReuploadMode, reuploadIds]);
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
@@ -45,7 +58,7 @@ const ChecklistSubmitPage: React.FC = () => {
   const setTick = (iid: string, v: boolean) => setTicks(t => ({ ...t, [iid]: v }));
 
   const validate = () => {
-    for (const it of items as any[]) {
+    for (const it of visibleItems) {
       const type: InputType = (it.input_type ?? 'tick') as InputType;
       if (!it.required) continue;
       if (type === 'tick' || type === 'tick_image') {
@@ -64,71 +77,91 @@ const ChecklistSubmitPage: React.FC = () => {
     return true;
   };
 
+  const uploadForItem = async (submissionId: string, itemId: string, blobs: Blob[]) => {
+    for (let i = 0; i < blobs.length; i++) {
+      const p = `${merchantId}/${user!.id}/${submissionId}/${itemId}-${Date.now()}-${i}.jpg`;
+      await supabase.storage.from('staff-checklist').upload(p, blobs[i], { contentType: 'image/jpeg' });
+      await table('submission_images').insert({
+        submission_id: submissionId, item_id: itemId, kind: 'item_photo', storage_path: p,
+      });
+    }
+  };
+
+  const saveAnswers = async (submissionId: string, itemList: any[]) => {
+    for (const it of itemList) {
+      const type: InputType = (it.input_type ?? 'tick') as InputType;
+      if (type === 'tick' || type === 'tick_image') {
+        if (ticks[it.id] !== undefined) {
+          await table('submission_answers').upsert({
+            submission_id: submissionId, item_id: it.id, answer_json: { value: !!ticks[it.id] },
+          }, { onConflict: 'submission_id,item_id' } as any);
+        }
+      }
+      if (type === 'text' && texts[it.id] !== undefined) {
+        await table('submission_answers').upsert({
+          submission_id: submissionId, item_id: it.id, answer_json: { value: texts[it.id] ?? '' },
+        }, { onConflict: 'submission_id,item_id' } as any);
+      }
+      if (type === 'number' && numbers[it.id] !== undefined && numbers[it.id] !== '') {
+        await table('submission_answers').upsert({
+          submission_id: submissionId, item_id: it.id, answer_json: { value: Number(numbers[it.id]) },
+        }, { onConflict: 'submission_id,item_id' } as any);
+      }
+      const bs = images[it.id] ?? [];
+      if (bs.length) await uploadForItem(submissionId, it.id, bs);
+    }
+  };
+
   const submit = async () => {
     if (!user?.id || !merchantId || !id) return;
+    if (isLockedReadOnly) { toast.error('This submission is locked.'); return; }
     if (!validate()) return;
-
     setBusy(true);
     try {
-      const { data: sub, error } = await table('checklist_submissions').insert({
-        checklist_id: id, merchant_id: merchantId, store_id: store?.activeStoreId ?? null,
-        staff_user_id: user.id, staff_name: user.user_metadata?.full_name ?? user.email ?? null,
-        status: 'pending', gps_lat: gps?.lat, gps_lng: gps?.lng,
-      }).select('id').maybeSingle();
-      if (error || !sub) throw new Error(error?.message ?? 'Insert failed');
+      let submissionId: string;
 
-      await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: sub.id, action: 'submitted' });
+      if (isReuploadMode && latest?.id) {
+        // Re-upload: replace only failed items
+        submissionId = latest.id;
+        // Clear old images/answers for reupload items
+        await table('submission_images').delete().eq('submission_id', submissionId).in('item_id', reuploadIds);
+        await table('submission_answers').delete().eq('submission_id', submissionId).in('item_id', reuploadIds);
+        // Also clear old AI results for those items so fresh ones are written
+        await table('ai_item_verification_results').delete().eq('submission_id', submissionId).in('item_id', reuploadIds);
 
-      // per-item ticks, text, number and images
-      for (const it of items as any[]) {
-        const type: InputType = (it.input_type ?? 'tick') as InputType;
-        if (type === 'tick' || type === 'tick_image') {
-          if (ticks[it.id] !== undefined) {
-            await table('submission_answers').insert({
-              submission_id: sub.id, item_id: it.id, answer_json: { value: !!ticks[it.id] },
-            });
-          }
-        }
-        if (type === 'text' && texts[it.id] !== undefined) {
-          await table('submission_answers').insert({
-            submission_id: sub.id, item_id: it.id, answer_json: { value: texts[it.id] ?? '' },
-          });
-        }
-        if (type === 'number' && numbers[it.id] !== undefined && numbers[it.id] !== '') {
-          await table('submission_answers').insert({
-            submission_id: sub.id, item_id: it.id, answer_json: { value: Number(numbers[it.id]) },
-          });
-        }
-        const bs = images[it.id] ?? [];
-        for (let i = 0; i < bs.length; i++) {
-          const p = `${merchantId}/${user.id}/${sub.id}/${it.id}-${i}-${Date.now()}.jpg`;
-          await supabase.storage.from('staff-checklist').upload(p, bs[i], { contentType: 'image/jpeg' });
-          await table('submission_images').insert({
-            submission_id: sub.id, item_id: it.id, kind: 'item_photo', storage_path: p,
-          });
-        }
+        await saveAnswers(submissionId, visibleItems);
+
+        await table('checklist_submissions').update({
+          status: 'pending',
+          reupload_item_ids: [],
+          reupload_count: (latest.reupload_count ?? 0) + 1,
+          submitted_at: new Date().toISOString(),
+          gps_lat: gps?.lat, gps_lng: gps?.lng,
+        }).eq('id', submissionId);
+
+        await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: submissionId, action: 're_uploaded' });
+      } else {
+        const { data: sub, error } = await table('checklist_submissions').insert({
+          checklist_id: id, merchant_id: merchantId, store_id: store?.activeStoreId ?? null,
+          staff_user_id: user.id, staff_name: user.user_metadata?.full_name ?? user.email ?? null,
+          status: 'pending', gps_lat: gps?.lat, gps_lng: gps?.lng,
+        }).select('id').maybeSingle();
+        if (error || !sub) throw new Error(error?.message ?? 'Insert failed');
+        submissionId = sub.id;
+
+        await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: submissionId, action: 'submitted' });
+        await saveAnswers(submissionId, visibleItems);
       }
 
-      // Notify owners of submission
-      const { data: owners } = await table('user_roles').select('user_id').eq('customer_id', merchantId).in('role', ['owner','merchant','admin','store_manager']);
-      const recipients = Array.from(new Set((owners as any[])?.map((o: any) => o.user_id).filter(Boolean) ?? []));
-      if (recipients.length) {
-        await table('checklist_notifications').insert(recipients.map((uid: string) => ({
-          user_id: uid, merchant_id: merchantId, kind: 'submitted', title: 'New checklist submission',
-          body: `${user.user_metadata?.full_name ?? user.email ?? 'Staff'} submitted a checklist`,
-          payload: { submission_id: sub.id },
-        })));
-      }
-
-      // Only run AI when at least one item has BOTH an image response type AND ai_verify=true.
-      // Otherwise the checklist has no AI component and we save responses only.
-      const aiItems = (items as any[]).filter(it =>
+      // Determine if AI should run
+      const aiItems = visibleItems.filter(it =>
         (it.input_type === 'image' || it.input_type === 'tick_image') && it.ai_verify === true
       );
+
       if (aiItems.length > 0) {
         toast.info('Running AI verification…');
         const { data: verifyRes, error: vErr } = await supabase.functions.invoke('verify-checklist-submission', {
-          body: { submission_id: sub.id },
+          body: { submission_id: submissionId },
         });
         if (vErr) {
           toast.error(vErr.message);
@@ -137,10 +170,22 @@ const ChecklistSubmitPage: React.FC = () => {
           setSubmissionStatus(verifyRes?.submission_status ?? null);
         }
       } else {
+        // Notify owners for non-AI submissions
+        const { data: owners } = await table('user_roles').select('user_id').eq('customer_id', merchantId).in('role', ['owner','merchant','admin','store_manager']);
+        const recipients = Array.from(new Set((owners as any[])?.map((o: any) => o.user_id).filter(Boolean) ?? []));
+        if (recipients.length) {
+          await table('checklist_notifications').insert(recipients.map((uid: string) => ({
+            user_id: uid, merchant_id: merchantId, kind: 'submitted', title: 'New checklist submission',
+            body: `${user.user_metadata?.full_name ?? user.email ?? 'Staff'} submitted a checklist`,
+            payload: { submission_id: submissionId },
+          })));
+        }
         setResults([]);
         setSubmissionStatus('pending');
         toast.success('Submitted.');
       }
+
+      refetchLatest();
     } catch (e: any) {
       toast.error(e.message ?? 'Submission failed');
     } finally {
@@ -163,6 +208,28 @@ const ChecklistSubmitPage: React.FC = () => {
     );
   }
 
+  if (isLockedReadOnly) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4">
+        <Button variant="ghost" size="sm" onClick={() => nav(-1)}><ArrowLeft className="h-4 w-4 mr-1" /> Back</Button>
+        <Card className="rounded-2xl bg-card/60 backdrop-blur">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Lock className="h-5 w-5" /> Already submitted</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm">
+              Status: <Badge>{latest?.status}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              This checklist is locked. It can only be edited if your owner requests a re-upload.
+            </p>
+            <Button variant="outline" onClick={() => nav(`/staff/checklists/history/${latest?.id}`)}>View submission</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-4 pb-24">
       <div className="flex items-center gap-2">
@@ -170,7 +237,20 @@ const ChecklistSubmitPage: React.FC = () => {
         {gps && <div className="ml-auto text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> GPS locked</div>}
       </div>
 
-      {(items as any[]).map(it => {
+      {isReuploadMode && (
+        <Card className="rounded-2xl border-amber-500/40 bg-amber-500/5">
+          <CardContent className="p-4 flex items-start gap-3">
+            <RefreshCw className="h-5 w-5 text-amber-500 mt-0.5" />
+            <div className="text-sm">
+              <div className="font-semibold">Re-upload requested</div>
+              <div className="text-muted-foreground">Only the items below need to be redone. Attempt #{(latest?.reupload_count ?? 0) + 1}.</div>
+              {latest?.review_notes && <div className="mt-1 italic">"{latest.review_notes}"</div>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {visibleItems.map(it => {
         const type: InputType = (it.input_type ?? 'tick') as InputType;
         const needsTick = type === 'tick' || type === 'tick_image';
         const needsImage = type === 'image' || type === 'tick_image';
@@ -242,7 +322,7 @@ const ChecklistSubmitPage: React.FC = () => {
       <div className="fixed bottom-0 left-0 right-0 p-3 bg-card/80 backdrop-blur border-t border-border">
         <div className="max-w-2xl mx-auto">
           <Button className="w-full" size="lg" onClick={submit} disabled={busy}>
-            <Send className="h-4 w-4 mr-1" /> {busy ? 'Submitting…' : 'Submit'}
+            <Send className="h-4 w-4 mr-1" /> {busy ? 'Submitting…' : isReuploadMode ? 'Submit re-upload' : 'Submit'}
           </Button>
         </div>
       </div>
