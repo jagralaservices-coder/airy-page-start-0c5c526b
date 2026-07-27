@@ -221,7 +221,9 @@ const AuthPage: React.FC = () => {
   };
 
   const clearBrowserAuthForStaffSession = async () => {
-    localStorage.setItem('pos_staff_login_mode', 'true');
+    localStorage.removeItem('pos_staff_login_mode');
+    localStorage.removeItem('pos_staff_session');
+    localStorage.removeItem('logged_in_staff');
     localStorage.removeItem('pos_session_active');
     localStorage.removeItem('pos_session_backup');
     localStorage.removeItem('pos_user_backup');
@@ -229,11 +231,6 @@ const AuthPage: React.FC = () => {
     localStorage.removeItem('pos_customer_backup');
     localStorage.removeItem('pos_store_backup');
     localStorage.removeItem('pos_is_store_login');
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-        localStorage.removeItem(key);
-      }
-    });
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
         localStorage.removeItem(key);
@@ -369,6 +366,31 @@ const AuthPage: React.FC = () => {
         toast({ title: 'Login successful', description: `Welcome ${store.name}` });
         navigate('/pos', { replace: true });
         return;
+      }
+
+      if (trimmedEmail.includes('@') && /^\d+$/.test(trimmedPassword)) {
+        try {
+          const { data: staffData, error: staffError } = await supabase.functions.invoke('staff-login', {
+            body: { email: trimmedEmail.toLowerCase(), password: trimmedPassword }
+          });
+
+          if (!staffError && staffData?.success) {
+            await clearBrowserAuthForStaffSession();
+            const hydrated = await hydrateStaffAuthSession(staffData, trimmedPassword);
+            if (!hydrated) {
+              setIsLoading(false);
+              setLoginErrorMsg('Staff session could not be created. Please reset this staff PIN.');
+              toast({ title: t('auth.loginFailed'), description: 'Staff session could not be created. Please reset this staff PIN.', variant: 'destructive' });
+              return;
+            }
+            applyStaffFunctionSession(staffData, trimmedEmail);
+            setIsLoading(false);
+            toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
+            console.info('[STAFF_AUTH] REDIRECT DASHBOARD src/pages/auth/AuthPage.tsx:374', { path: '/staff-dashboard' });
+            goToStaffDashboard();
+            return;
+          }
+        } catch (_) { /* fall back to normal email login */ }
       }
 
       let loginResult = await login(trimmedEmail, trimmedPassword);
