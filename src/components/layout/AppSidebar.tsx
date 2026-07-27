@@ -136,7 +136,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       path: '/checklists',
       icon: ClipboardList,
       label: 'Checklists',
-      allowedRoles: ['admin', 'owner', 'store_manager']
+      allowedRoles: ['admin', 'owner', 'store_manager', 'merchant']
     },
     {
       path: '/staff/checklists',
