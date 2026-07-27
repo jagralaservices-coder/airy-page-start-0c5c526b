@@ -175,15 +175,23 @@ const ChecklistReviewPage: React.FC = () => {
           const refImgs = referenceByItem[s.checklist_id] ?? {};
           const answers = answersBySub[s.id] ?? {};
 
+          const locked = !!s.locked;
+          const pendingReupload = Array.isArray(s.reupload_item_ids) && s.reupload_item_ids.length > 0;
           return (
             <Card key={s.id} className="rounded-2xl bg-card/60 backdrop-blur">
               <CardHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <CardTitle className="text-base">{s.staff_name ?? 'Staff'}</CardTitle>
-                    <p className="text-xs text-muted-foreground">{new Date(s.submitted_at).toLocaleString()} · {s.shift ?? '—'}</p>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {s.staff_name ?? 'Staff'}
+                      {locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(s.submitted_at).toLocaleString()} · {s.shift ?? '—'}
+                      {(s.reupload_count ?? 0) > 0 && <> · <span className="text-amber-500">Re-uploaded ×{s.reupload_count}</span></>}
+                    </p>
                   </div>
-                  <Badge variant={s.status === 'approved' ? 'default' : s.status === 'rejected' || s.status === 'ai_fail' ? 'destructive' : 'secondary'}>{s.status}</Badge>
+                  <Badge variant={s.status === 'approved' ? 'default' : s.status === 'rejected' || s.status === 'ai_fail' ? 'destructive' : s.status === 'review_required' ? 'destructive' : 'secondary'}>{s.status}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -240,10 +248,25 @@ const ChecklistReviewPage: React.FC = () => {
                 )}
 
                 {aiItems.length > 0 && <AiItemResultPanel items={aiItems} />}
+                {s.review_notes && <p className="text-xs italic text-muted-foreground">Note: "{s.review_notes}"</p>}
 
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => review(s, 'approved')} disabled={s.status === 'approved'}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve</Button>
                   <Button size="sm" variant="destructive" onClick={() => review(s, 'rejected', prompt('Reason?') ?? '')} disabled={s.status === 'rejected'}><XCircle className="h-4 w-4 mr-1" /> Reject</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pendingReupload || items.length === 0}
+                    onClick={() => setReupload({
+                      sub: s,
+                      items: items.map(it => {
+                        const aiForIt = aiResultsRaw.find((r: any) => r.item_id === it.id);
+                        return { id: it.id, title: it.title, status: aiForIt?.status };
+                      }),
+                    })}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" /> {pendingReupload ? 'Re-upload pending' : 'Request re-upload'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -252,6 +275,12 @@ const ChecklistReviewPage: React.FC = () => {
       </div>}
 
       {compare && <ImageCompareViewer referenceUrls={compare.ref} submittedUrls={compare.sub} onClose={() => setCompare(null)} />}
+      <RequestReuploadDialog
+        open={!!reupload}
+        onOpenChange={(v) => { if (!v) setReupload(null); }}
+        items={reupload?.items ?? []}
+        onConfirm={async (ids, notes) => { if (reupload) await requestReupload(reupload.sub, ids, notes); }}
+      />
     </div>
   );
 };
