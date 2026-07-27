@@ -237,11 +237,6 @@ const AuthPage: React.FC = () => {
     localStorage.removeItem('pos_customer_backup');
     localStorage.removeItem('pos_store_backup');
     localStorage.removeItem('pos_is_store_login');
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-        localStorage.removeItem(key);
-      }
-    });
   };
 
   useEffect(() => {
