@@ -214,7 +214,7 @@ export const OperationsPage: React.FC = () => {
     ...(canAccess('staffManagement') ? [
       { id: 'staff-settings', icon: UserCog, label: t('operations.staffSettings'), path: '/staff-settings' },
     ] : []),
-    { id: 'checklists', icon: ClipboardList, label: 'Checklists', path: '/checklists' },
+    { id: 'checklists', icon: ClipboardList, label: 'Checklists', path: (userRole?.role === 'staff' || userRole?.role === 'cashier') ? '/staff/checklists' : '/checklists' },
     { id: 'help', icon: HelpCircle, label: t('operations.help'), path: '/support' },
     
     { id: 'lang-profiles', icon: Languages, label: t('operations.language'), path: '/owner-settings?view=locale' },
