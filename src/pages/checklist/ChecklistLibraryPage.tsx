@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Copy, ClipboardList, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { useMerchant } from '@/contexts/MerchantContext';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { useChecklists, useInvalidateChecklists, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
 import { toast } from 'sonner';
+import { NewChecklistDialog } from '@/components/checklist/NewChecklistDialog';
 
 const table = (n: string) => supabase.from(n as any);
 
@@ -21,42 +22,34 @@ const ChecklistLibraryPage: React.FC = () => {
   const invalidate = useInvalidateChecklists();
 
   const [search, setSearch] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const filtered = useMemo(
     () => lists.filter((c: any) => c.name.toLowerCase().includes(search.toLowerCase())),
     [lists, search]
   );
 
-  const createNew = async () => {
-    if (!merchantId || !user?.id) {
-      toast.error('Not signed in');
-      return;
-    }
-    setCreating(true);
-    try {
-      const { data, error } = await table('checklists').insert({
-        merchant_id: merchantId,
-        name: 'Untitled checklist',
-        description: '',
-        department: '',
-        category: '',
-        frequency: 'daily',
-        is_active: true,
-        created_by: user.id,
-      }).select('id').maybeSingle();
-      if (error || !data) throw error ?? new Error('Failed');
-      await logChecklistActivity({
-        merchant_id: merchantId, actor_id: user.id,
-        entity_type: 'checklist', entity_id: data.id, action: 'created',
-      });
-      invalidate();
-      nav(`/checklists/${data.id}/edit`);
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Failed to create');
-    } finally {
-      setCreating(false);
-    }
+  const createNew = async (payload: { name: string; shift_type: string; frequency: string }) => {
+    if (!merchantId || !user?.id) { toast.error('Not signed in'); return; }
+    const { data, error } = await table('checklists').insert({
+      merchant_id: merchantId,
+      name: payload.name,
+      description: '',
+      department: '',
+      category: payload.shift_type,
+      shift_type: payload.shift_type,
+      frequency: payload.frequency,
+      is_active: true,
+      created_by: user.id,
+    }).select('id').maybeSingle();
+    if (error || !data) { toast.error(error?.message ?? 'Failed'); return; }
+    await logChecklistActivity({
+      merchant_id: merchantId, actor_id: user.id,
+      entity_type: 'checklist', entity_id: data.id, action: 'created',
+      meta: payload,
+    });
+    invalidate();
+    nav(`/checklists/${data.id}/edit`);
   };
 
   const del = async (id: string) => {
@@ -104,8 +97,8 @@ const ChecklistLibraryPage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <Input placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
-          <Button onClick={createNew} disabled={creating}>
-            <Plus className="h-4 w-4 mr-1" /> {creating ? 'Creating…' : 'New checklist'}
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> New checklist
           </Button>
         </div>
       </div>
@@ -123,7 +116,7 @@ const ChecklistLibraryPage: React.FC = () => {
           <CardContent className="p-10 text-center space-y-3">
             <ClipboardList className="h-10 w-10 mx-auto text-muted-foreground" />
             <p className="text-muted-foreground">No checklists yet.</p>
-            <Button onClick={createNew} disabled={creating}>
+            <Button onClick={() => setDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-1" /> New checklist
             </Button>
           </CardContent>
@@ -153,6 +146,8 @@ const ChecklistLibraryPage: React.FC = () => {
           ))}
         </div>
       )}
+
+      <NewChecklistDialog open={dialogOpen} onOpenChange={setDialogOpen} onCreate={createNew} />
     </div>
   );
 };

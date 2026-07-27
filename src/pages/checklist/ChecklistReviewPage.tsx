@@ -8,9 +8,10 @@ import { useMerchant } from '@/contexts/MerchantContext';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { AiItemResultPanel, AiItemResult } from '@/components/checklist/AiItemResultPanel';
 import { ImageCompareViewer } from '@/components/checklist/ImageCompareViewer';
+import { RequestReuploadDialog, ReuploadItem } from '@/components/checklist/RequestReuploadDialog';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, XCircle, Eye } from 'lucide-react';
+import { CheckCircle2, XCircle, Eye, RefreshCw, Lock } from 'lucide-react';
 
 const table = (n: string) => supabase.from(n as any);
 
@@ -30,7 +31,8 @@ const ChecklistReviewPage: React.FC = () => {
   const [itemsByChecklist, setItemsByChecklist] = useState<Record<string, ItemInfo[]>>({});
   const [answersBySub, setAnswersBySub] = useState<Record<string, Record<string, any>>>({});
   const [compare, setCompare] = useState<{ ref: string[]; sub: string[] } | null>(null);
-  const [filter, setFilter] = useState<'all' | 'pending' | 'ai_fail' | 'approved' | 'rejected'>('all');
+  const [filter, setFilter] = useState<'all' | 'pending' | 'review_required' | 'ai_fail' | 'approved' | 'rejected'>('all');
+  const [reupload, setReupload] = useState<{ sub: any; items: ReuploadItem[] } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -99,7 +101,12 @@ const ChecklistReviewPage: React.FC = () => {
   const review = async (s: any, decision: 'approved' | 'rejected', notes?: string) => {
     if (!user?.id || !merchantId) return;
     await table('owner_reviews').insert({ submission_id: s.id, reviewer_id: user.id, decision, notes });
-    await table('checklist_submissions').update({ status: decision }).eq('id', s.id);
+    await table('checklist_submissions').update({
+      status: decision,
+      review_notes: notes ?? null,
+      approved_by: decision === 'approved' ? user.id : null,
+      reupload_item_ids: [],
+    }).eq('id', s.id);
     await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: s.id, action: decision });
     await table('checklist_notifications').insert({
       user_id: s.staff_user_id, merchant_id: merchantId, kind: decision,
@@ -107,6 +114,26 @@ const ChecklistReviewPage: React.FC = () => {
       payload: { submission_id: s.id },
     });
     toast.success(`Marked ${decision}`);
+    qc.invalidateQueries({ queryKey: ['checklist_submissions'] });
+  };
+
+  const requestReupload = async (s: any, itemIds: string[], notes: string) => {
+    if (!user?.id || !merchantId) return;
+    await table('owner_reviews').insert({ submission_id: s.id, reviewer_id: user.id, decision: 'request_reupload', notes });
+    await table('checklist_submissions').update({
+      status: 'pending',
+      reupload_item_ids: itemIds,
+      reupload_requested_at: new Date().toISOString(),
+      reupload_requested_by: user.id,
+      review_notes: notes || null,
+    }).eq('id', s.id);
+    await logChecklistActivity({ merchant_id: merchantId, actor_id: user.id, entity_type: 'submission', entity_id: s.id, action: 'reupload_requested', meta: { itemIds } });
+    await table('checklist_notifications').insert({
+      user_id: s.staff_user_id, merchant_id: merchantId, kind: 'reupload_requested',
+      title: 'Re-upload requested', body: notes || 'Please redo the flagged items.',
+      payload: { submission_id: s.id, item_ids: itemIds },
+    });
+    toast.success('Re-upload requested');
     qc.invalidateQueries({ queryKey: ['checklist_submissions'] });
   };
 
@@ -148,15 +175,23 @@ const ChecklistReviewPage: React.FC = () => {
           const refImgs = referenceByItem[s.checklist_id] ?? {};
           const answers = answersBySub[s.id] ?? {};
 
+          const locked = !!s.locked;
+          const pendingReupload = Array.isArray(s.reupload_item_ids) && s.reupload_item_ids.length > 0;
           return (
             <Card key={s.id} className="rounded-2xl bg-card/60 backdrop-blur">
               <CardHeader>
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <CardTitle className="text-base">{s.staff_name ?? 'Staff'}</CardTitle>
-                    <p className="text-xs text-muted-foreground">{new Date(s.submitted_at).toLocaleString()} · {s.shift ?? '—'}</p>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      {s.staff_name ?? 'Staff'}
+                      {locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(s.submitted_at).toLocaleString()} · {s.shift ?? '—'}
+                      {(s.reupload_count ?? 0) > 0 && <> · <span className="text-amber-500">Re-uploaded ×{s.reupload_count}</span></>}
+                    </p>
                   </div>
-                  <Badge variant={s.status === 'approved' ? 'default' : s.status === 'rejected' || s.status === 'ai_fail' ? 'destructive' : 'secondary'}>{s.status}</Badge>
+                  <Badge variant={s.status === 'approved' ? 'default' : s.status === 'rejected' || s.status === 'ai_fail' ? 'destructive' : s.status === 'review_required' ? 'destructive' : 'secondary'}>{s.status}</Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -213,10 +248,25 @@ const ChecklistReviewPage: React.FC = () => {
                 )}
 
                 {aiItems.length > 0 && <AiItemResultPanel items={aiItems} />}
+                {s.review_notes && <p className="text-xs italic text-muted-foreground">Note: "{s.review_notes}"</p>}
 
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => review(s, 'approved')} disabled={s.status === 'approved'}><CheckCircle2 className="h-4 w-4 mr-1" /> Approve</Button>
                   <Button size="sm" variant="destructive" onClick={() => review(s, 'rejected', prompt('Reason?') ?? '')} disabled={s.status === 'rejected'}><XCircle className="h-4 w-4 mr-1" /> Reject</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pendingReupload || items.length === 0}
+                    onClick={() => setReupload({
+                      sub: s,
+                      items: items.map(it => {
+                        const aiForIt = aiResultsRaw.find((r: any) => r.item_id === it.id);
+                        return { id: it.id, title: it.title, status: aiForIt?.status };
+                      }),
+                    })}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-1" /> {pendingReupload ? 'Re-upload pending' : 'Request re-upload'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -225,6 +275,12 @@ const ChecklistReviewPage: React.FC = () => {
       </div>}
 
       {compare && <ImageCompareViewer referenceUrls={compare.ref} submittedUrls={compare.sub} onClose={() => setCompare(null)} />}
+      <RequestReuploadDialog
+        open={!!reupload}
+        onOpenChange={(v) => { if (!v) setReupload(null); }}
+        items={reupload?.items ?? []}
+        onConfirm={async (ids, notes) => { if (reupload) await requestReupload(reupload.sub, ids, notes); }}
+      />
     </div>
   );
 };

@@ -1,98 +1,93 @@
+# Checklist System — Production Refactor
 
-# AI-Powered Staff Checklist Management System
+Goal: one editor, real AI comparison against owner reference images, automatic decisions with confidence threshold, owner review with Approve / Reject / Request Re-upload, submission locking, and real-time notifications.
 
-A production feature for MAXORA POS that lets Owners/Admins build checklists, assign them to staff, and use AI Vision (via Lovable AI Gateway with `google/gemini-2.5-pro`) to verify staff selfies against owner-uploaded uniform references. Integrates cleanly with existing Auth, Merchant, Store, Staff, and Attendance modules — nothing existing is removed or modified beyond additive routes/menu entries.
+## 1. Database migration
 
-## Scope
+Add to `public.checklist_submissions`:
+- `locked` boolean (default `false`) — read-only when true
+- `reupload_count` integer (default 0)
+- `reupload_item_ids` uuid[] — items the owner asked staff to re-upload
+- `reupload_requested_at` timestamptz
+- `reupload_requested_by` uuid
+- `approved_at` timestamptz, `approved_by` uuid (nullable; NULL when auto-approved)
+- `review_notes` text
+- `parent_submission_id` uuid (nullable, links a re-upload back to the original)
 
-Build in **one implementation** across three layers: database + storage + RLS, edge functions for AI verification and notifications, and the full React UI for Owner and Staff.
+Add to `public.checklists`:
+- `ai_confidence_threshold` integer (default 75) — auto-approve if every AI-verified item scores ≥ threshold
 
-## 1. Database (single migration)
+Extend `checklist_submissions.status` enum with `review_required`. Loosen `owner_reviews.decision` CHECK to allow `request_reupload`. Add `checklist_notifications.kind` values: `approved`, `rejected`, `reupload_requested`, `review_required`.
 
-New tables in `public` (all with GRANTs + RLS + policies + `updated_at` triggers):
+Trigger: when `status` becomes `approved` or `ai_pass` and no re-upload pending → set `locked = true`. When a re-upload request is written → set `locked = false` and clear `approved_*`.
 
-- `checklists` — `merchant_id`, `store_id`, name, description, department, frequency (`daily|weekly|monthly|before_shift|after_shift|custom`), custom_cron, is_active, created_by
-- `checklist_items` — `checklist_id`, title, description, `answer_type` (`yes_no|text|number|photo|video|signature|multi_photo`), required, photo_required, video_required, gps_required, time_required, ai_verify, order_index
-- `checklist_assignments` — `checklist_id`, `assigned_role` (nullable), `assigned_user_id` (nullable), `store_id`, active
-- `checklist_submissions` — `checklist_id`, `staff_user_id`, `store_id`, `merchant_id`, `submitted_at`, shift, status (`pending|ai_pass|ai_fail|approved|rejected`), overall_score, gps_lat, gps_lng
-- `submission_answers` — `submission_id`, `item_id`, `answer_json`
-- `submission_images` — `submission_id`, `item_id` (nullable for selfie), `kind` (`selfie|item_photo`), `storage_path`, `thumb_path`, `taken_at`
-- `uniform_reference_images` — `merchant_id`, `kind` (`front|back|side|cap|apron|shoes|other`), `storage_path`, `version`, `is_current`, `uploaded_by`
-- `ai_verification_results` — `submission_id`, `raw_response jsonb`, per-category scores as jsonb, overall_score, result (`pass|fail`), reason text, model
-- `owner_reviews` — `submission_id`, `reviewer_id`, decision (`approved|rejected`), notes
-- `checklist_notifications` — `user_id`, kind, payload jsonb, read_at
-- `checklist_templates` — seed data of ~20 default items (Uniform, Hair, Nails, Shoes, Cap, Mask, Gloves, Apron, ID Card, Face Clean, Counter Clean, Kitchen Clean, Temperature, Hand Wash, Cash Drawer, Machine Check, Opening/Closing Cleaning, Food Quality, Expiry)
-- `checklist_activity_logs` — audit trail (`entity_type`, `entity_id`, action, actor_id, meta jsonb)
+## 2. Edge function `verify-checklist-submission`
 
-All tables get `GRANT SELECT/INSERT/UPDATE/DELETE ... TO authenticated; GRANT ALL ... TO service_role;`.
-Storage: staff face uploads reuse patterns from `staff-faces`; add `submission_images` writes via signed URLs.
+Existing per-item Gemini comparison stays. After results:
+- If every AI-verified item is `match` AND its `confidence` ≥ checklist threshold → set `status = 'approved'`, `locked = true`, `approved_at = now()`, notify staff (`approved`).
+- If any item is `no_match` / `poor_quality` / below threshold → `status = 'review_required'`, notify owners (`review_required`).
+- Non-AI items still notify owners with `submitted`.
 
-RLS (using existing `has_role` / merchant-scope helpers where present, otherwise inline):
-- Owners/merchant/admin/super_admin: full access to rows where `merchant_id` matches theirs.
-- Staff: SELECT on assignments/checklists targeting them; INSERT own submissions/answers/images; no UPDATE on AI results or reviews.
-- `owner_reviews` write restricted to owner/admin roles.
+Never fabricate scores; keep the strict JSON prompt and `no_reference` / `poor_quality` branches.
 
-## 2. Storage buckets
+## 3. Single editor (remove the "Untitled" flow)
 
-Two private buckets created via `supabase--storage_create_bucket`:
-- `uniform-reference` — owner uploads, versioned
-- `staff-checklist` — per-submission staff uploads
+`ChecklistLibraryPage`: replace instant create with a `NewChecklistDialog` that captures Name + Shift Type + Frequency before insert, then routes to `/checklists/:id/edit`. The full-page `ChecklistBuilderPage` remains the only editor for both create-continue and edit. No popup builder exists.
 
-Storage RLS on `storage.objects`: only members of the same `merchant_id` (path-prefixed `merchant_id/...`) can read; staff can insert into their own submission prefix.
+## 4. Staff submission flow (`ChecklistSubmitPage`)
 
-## 3. Edge functions
+- On load: fetch the latest submission for this staff + checklist.
+  - If `locked` and no re-upload → show read-only "Already submitted" screen with status + AI panel; hide inputs and submit button.
+  - If a re-upload is pending (`reupload_item_ids` populated) → render only those failed items, and on submit **update** that submission (clear `reupload_item_ids`, bump `reupload_count`, replace only the failed-item images/answers, set `status = 'pending'`, then re-invoke AI).
+  - Otherwise → normal fresh submission (current behaviour).
+- After submit, invoke `verify-checklist-submission`; render result.
 
-- `verify-checklist-submission` — takes `submission_id`, loads current uniform references + submission images, calls Lovable AI Gateway `google/gemini-2.5-pro` (multimodal, image inputs by signed URL) with a strict system prompt returning JSON:
-  `{ categories: { uniform, hair, shoes, nails, cap, mask, gloves, id_card, face_visible, cleanliness }, overall_score, result: "pass"|"fail", reason }`
-  Persists to `ai_verification_results`, updates `checklist_submissions.status` to `ai_pass`/`ai_fail`, writes activity log, emits notifications to owners on fail/submit.
-- `checklist-notify` — insert notification rows + realtime channel broadcast for staff & owner events.
+## 5. Owner review (`ChecklistReviewPage`)
 
-Both use CORS shared headers, JWT validation via `SUPABASE_ANON_KEY` client, and `SUPABASE_SERVICE_ROLE_KEY` for writes.
+Each card shows staff name, submission time, per-item reference vs submitted image, tick/text answers, AI status + confidence + reason, `reupload_count` badge.
 
-## 4. Frontend
+Three actions:
+- **Approve** → `status='approved'`, `locked=true`, `approved_by=user`, notify staff `approved`.
+- **Reject** → `status='rejected'`, `locked=true`, notify staff `rejected`.
+- **Request Re-upload** → dialog to pick which items must be redone → writes `owner_reviews` (`request_reupload`), sets `status='pending'`, `locked=false`, `reupload_item_ids=<selected>`, `reupload_requested_at=now`, notifies staff `reupload_requested`.
 
-New route tree under `/checklists`:
+## 6. Staff dashboard (`StaffChecklistsPage`)
 
-- `ChecklistsHubPage` — role-aware landing.
-- Owner:
-  - `ChecklistBuilderPage` — dnd-kit builder for items with all answer types + AI toggle. Frequency, department, outlet, role/staff assignment.
-  - `ChecklistLibraryPage` — list / edit / delete / duplicate; template gallery to bootstrap defaults.
-  - `UniformReferencePage` — upload front/back/side/cap/apron/shoes, versioned, replace anytime.
-  - `ChecklistReviewPage` — cards for submissions with AI score, images, side-by-side image compare (reference vs selfie, zoom/rotate/fullscreen), timeline, approve/reject.
-  - `ChecklistReportsPage` — Today/Weekly/Monthly completion, failed items, avg AI score, top staff, late, pending, rejected. CSV export using existing `reportCsvUtils`.
-  - `ChecklistAuditPage` — activity log viewer.
-- Staff:
-  - `StaffChecklistsPage` — assigned checklists list (from `checklist_assignments` filtered by role/user).
-  - `ChecklistSubmitPage` — completes items one by one, forces `<input type="file" accept="image/*" capture="environment">` (camera-only, no gallery — use `getUserMedia` when available and fall back to `capture` attribute; gallery `<input>` without capture is never rendered), captures live selfie via `getUserMedia`, uploads to storage, on submit invokes `verify-checklist-submission`.
-  - `MyChecklistHistoryPage` — past submissions with AI result & owner decision.
+New "Action needed" section listing submissions where `reupload_item_ids` is non-empty, linking straight into the re-upload view. Recent submissions list shows `approved` / `rejected` / `review_required` badges.
 
-Reusable components under `src/components/checklist/`:
-`ChecklistItemEditor`, `AnswerTypePicker`, `LiveCameraCapture`, `ImageCompareViewer`, `AiScorePanel`, `SubmissionTimeline`, `NotificationBell` (top bar addition).
+## 7. Notifications
 
-React Query hooks in `POSDataContext` style under `src/hooks/checklist/`: `useChecklists`, `useChecklistSubmissions`, `useUniformReferences`, `useChecklistNotifications` — with realtime subscriptions via existing `RealtimeContext`.
+- Staff receives: `assigned` (new assignment insert trigger), `approved`, `rejected`, `reupload_requested`.
+- Owner receives: `submitted` (non-AI), `review_required` (AI issues), `ai_pass` optional summary.
+Realtime already subscribes to `checklist_notifications`; no context change needed.
 
-Guards: `RequireRole` for owner-only pages (`owner`, `merchant`, `admin`, `super_admin`); staff pages allowed for `staff`, `cashier`, `store_manager`.
+## 8. Locking / security
 
-## 5. Navigation
+- DB trigger + edge-function writes are the only ways to flip `locked`.
+- Staff RLS on `checklist_submissions`: `UPDATE` allowed only when `locked = false` AND `staff_user_id = auth.uid()`.
+- Staff RLS on `submission_images` / `submission_answers`: `INSERT`/`UPDATE`/`DELETE` allowed only when parent submission is `locked = false`.
+- Owner review policies unchanged.
 
-Add "Checklists" entry to `AppSidebar` (owner group) and staff sidebar. No existing menu items removed.
+## 9. Files touched
 
-## 6. Audit + notifications
+**Migration**: one new SQL migration for columns, enum extension, trigger, updated RLS.
 
-Every create/edit/delete/assign/submit/AI-run/approve/reject writes a row to `checklist_activity_logs` (via a shared client helper wrapping existing `logSecurityAction` pattern) and, where relevant, a `checklist_notifications` row. Realtime channel updates both bells.
+**Edge function**: `supabase/functions/verify-checklist-submission/index.ts` (auto-approve + threshold + status wiring).
 
-## 7. UI system
+**Frontend**:
+- `src/pages/checklist/ChecklistLibraryPage.tsx` — remove auto "Untitled", add dialog.
+- `src/pages/checklist/ChecklistSubmitPage.tsx` — locking, re-upload mode, existing submission fetch.
+- `src/pages/checklist/ChecklistReviewPage.tsx` — Request Re-upload dialog + item picker.
+- `src/pages/checklist/StaffChecklistsPage.tsx` — Action-needed list.
+- `src/pages/checklist/StaffChecklistHistoryPage.tsx` — show approved/reupload badges + notes.
+- `src/hooks/checklist/useChecklistData.ts` — new hooks: `useLatestSubmission(checklistId)`, `usePendingReuploads()`, mutations.
+- New component `src/components/checklist/RequestReuploadDialog.tsx`.
+- New component `src/components/checklist/NewChecklistDialog.tsx`.
 
-Uses existing semantic tokens (`--primary`, `--card`, etc.), shadcn components, glassmorphism cards (`bg-card/60 backdrop-blur`), rounded-2xl, framer-motion for open/close, fully responsive (mobile-first grids, sticky action bars on mobile). Respects dark/light via existing `ThemeContext`.
+No changes to routes, sidebar, auth, or unrelated code. No changes to `supabase/config.toml`, `client.ts`, or `.env`.
 
-## Technical notes
+## 10. Out of scope
 
-- AI call goes through the edge function only; `LOVABLE_API_KEY` stays server-side. Prompt enforces JSON output and reuses the identity-focused guardrails already in `verify-face`.
-- Camera-only enforcement: capture component uses `navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" | "environment" } })`; file `<input>` fallback always sets `capture` and no gallery picker path exists.
-- Image compression: client uses `browser-image-compression` (already used elsewhere if present; otherwise a small canvas resize helper) to keep uploads under ~800KB and generates 256px thumbnails.
-- Offline queue: submissions cached in IndexedDB (reusing `src/lib/idb.ts`) and retried when online.
-- Nothing in `src/integrations/supabase/client.ts`, `.env`, or Attendance code is touched.
-
-## Out of scope
-
-Video answer type is stored but AI verification runs on images only in v1. Signature capture uses a canvas and stores PNG in `submission_images`.
+- Video AI verification (still image-only).
+- Bulk owner actions across multiple submissions.
+- Push notifications outside the in-app bell (browser Notification API already wired via `src/lib/notifications.ts`).

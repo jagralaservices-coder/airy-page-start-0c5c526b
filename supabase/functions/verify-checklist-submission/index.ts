@@ -135,12 +135,20 @@ Deno.serve(async (req) => {
 
     const { data: submission, error: sErr } = await admin
       .from('checklist_submissions')
-      .select('id, merchant_id, staff_user_id, checklist_id, staff_name')
+      .select('id, merchant_id, staff_user_id, checklist_id, staff_name, reupload_item_ids')
       .eq('id', submissionId)
       .maybeSingle();
     if (sErr || !submission) {
       return new Response(JSON.stringify({ error: 'Submission not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    // Confidence threshold from the checklist (default 75)
+    const { data: checklistRow } = await admin
+      .from('checklists')
+      .select('ai_confidence_threshold')
+      .eq('id', submission.checklist_id)
+      .maybeSingle();
+    const threshold = Math.max(0, Math.min(100, Number((checklistRow as any)?.ai_confidence_threshold ?? 75)));
 
     // Load checklist items that require image AND have AI verification explicitly enabled.
     // AI is dynamic: it only runs on items the owner opted in.
@@ -272,39 +280,70 @@ Deno.serve(async (req) => {
     const anyPoor = perItem.some(p => p.status === 'poor_quality');
     const anyNoRef = perItem.some(p => p.status === 'no_reference');
 
-    let subStatus: 'ai_pass' | 'ai_fail' | 'pending' = 'pending';
+    // Derive submission status from REAL per-item outcomes only.
+    const evaluated = perItem.filter(p => p.status === 'match' || p.status === 'no_match');
+    const anyNoMatch = perItem.some(p => p.status === 'no_match');
+    const anyPoor = perItem.some(p => p.status === 'poor_quality');
+    const anyNoRef = perItem.some(p => p.status === 'no_reference');
+    const belowThreshold = perItem
+      .filter(p => p.status === 'match')
+      .some(p => typeof p.confidence === 'number' && p.confidence < threshold);
+
+    let subStatus: 'approved' | 'ai_pass' | 'review_required' | 'pending' = 'pending';
+    let autoApproved = false;
     if (perItem.length === 0) {
-      subStatus = 'pending'; // nothing to auto-verify
-    } else if (evaluated.length === perItem.length && !anyNoMatch) {
-      subStatus = 'ai_pass';
-    } else if (anyNoMatch || anyPoor) {
-      subStatus = 'ai_fail';
+      subStatus = 'pending'; // nothing to auto-verify — owner or workflow completes it
+    } else if (evaluated.length === perItem.length && !anyNoMatch && !belowThreshold) {
+      subStatus = 'approved'; // fully AI-approved, above threshold
+      autoApproved = true;
+    } else if (anyNoMatch || anyPoor || belowThreshold) {
+      subStatus = 'review_required';
     } else if (anyNoRef) {
-      subStatus = 'pending'; // needs owner setup / manual review
+      subStatus = 'review_required'; // owner setup incomplete → owner reviews
     }
 
-    await admin.from('checklist_submissions').update({
+    const updatePatch: any = {
       status: subStatus,
-      overall_score: null, // no fake overall score
-    }).eq('id', submissionId);
+      overall_score: null,
+    };
+    if (autoApproved) {
+      updatePatch.approved_at = new Date().toISOString();
+      // approved_by intentionally NULL for auto-approve
+      updatePatch.locked = true;
+      updatePatch.reupload_item_ids = [];
+    }
+    await admin.from('checklist_submissions').update(updatePatch).eq('id', submissionId);
 
-    // Notify owners
-    const { data: owners } = await admin
-      .from('user_roles')
-      .select('user_id')
-      .eq('customer_id', submission.merchant_id)
-      .in('role', ['owner','merchant','admin','store_manager']);
-    const recipients = Array.from(new Set((owners ?? []).map((o: any) => o.user_id).filter(Boolean)));
-    if (recipients.length) {
-      const kind = subStatus === 'ai_pass' ? 'ai_pass' : subStatus === 'ai_fail' ? 'ai_fail' : 'submitted';
-      const title = subStatus === 'ai_pass' ? 'Checklist AI-verified: match'
-                  : subStatus === 'ai_fail' ? 'Checklist AI verification: issues found'
-                  : 'Checklist submitted (needs review)';
-      await admin.from('checklist_notifications').insert(recipients.map((uid: string) => ({
-        user_id: uid, merchant_id: submission.merchant_id, kind, title,
-        body: `${submission.staff_name ?? 'Staff'} — ${evaluated.length}/${perItem.length} items matched`,
-        payload: { submission_id: submissionId },
-      })));
+    // Notify: staff on auto-approve, owners on review_required / ai_fail
+    if (autoApproved) {
+      await admin.from('checklist_notifications').insert({
+        user_id: submission.staff_user_id,
+        merchant_id: submission.merchant_id,
+        kind: 'approved',
+        title: 'Checklist auto-approved',
+        body: `AI confirmed ${evaluated.length}/${perItem.length} items match reference (≥ ${threshold}% confidence)`,
+        payload: { submission_id: submissionId, auto: true },
+      });
+    } else {
+      const { data: owners } = await admin
+        .from('user_roles')
+        .select('user_id')
+        .eq('customer_id', submission.merchant_id)
+        .in('role', ['owner','merchant','admin','store_manager']);
+      const recipients = Array.from(new Set((owners ?? []).map((o: any) => o.user_id).filter(Boolean)));
+      if (recipients.length) {
+        const kind = subStatus === 'review_required' ? 'review_required' : 'submitted';
+        const title = subStatus === 'review_required'
+          ? 'Checklist needs your review'
+          : 'Checklist submitted';
+        const body = perItem.length
+          ? `${submission.staff_name ?? 'Staff'} — ${evaluated.length}/${perItem.length} items matched, ${anyNoMatch ? 'issues detected' : anyPoor ? 'image quality poor' : belowThreshold ? 'confidence below threshold' : 'awaiting review'}`
+          : `${submission.staff_name ?? 'Staff'} submitted a checklist`;
+        await admin.from('checklist_notifications').insert(recipients.map((uid: string) => ({
+          user_id: uid, merchant_id: submission.merchant_id, kind, title, body,
+          payload: { submission_id: submissionId },
+        })));
+      }
     }
 
     await admin.from('checklist_activity_logs').insert({
@@ -313,12 +352,14 @@ Deno.serve(async (req) => {
       entity_type: 'submission',
       entity_id: submissionId,
       action: 'ai_verified',
-      meta: { status: subStatus, items: perItem.length },
+      meta: { status: subStatus, items: perItem.length, auto_approved: autoApproved, threshold },
     });
 
     return new Response(JSON.stringify({
       success: true,
       submission_status: subStatus,
+      auto_approved: autoApproved,
+      threshold,
       items: perItem.map(p => ({
         item_id: p.item_id, title: p.title, status: p.status, confidence: p.confidence,
         reason: p.reason, detected_problems: p.detected_problems, suggestions: p.suggestions,

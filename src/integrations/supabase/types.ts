@@ -1209,13 +1209,22 @@ export type Database = {
       }
       checklist_submissions: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           checklist_id: string
           created_at: string
           gps_lat: number | null
           gps_lng: number | null
           id: string
+          locked: boolean
           merchant_id: string
           overall_score: number | null
+          parent_submission_id: string | null
+          reupload_count: number
+          reupload_item_ids: string[]
+          reupload_requested_at: string | null
+          reupload_requested_by: string | null
+          review_notes: string | null
           shift: string | null
           staff_name: string | null
           staff_user_id: string
@@ -1225,13 +1234,22 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           checklist_id: string
           created_at?: string
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          locked?: boolean
           merchant_id: string
           overall_score?: number | null
+          parent_submission_id?: string | null
+          reupload_count?: number
+          reupload_item_ids?: string[]
+          reupload_requested_at?: string | null
+          reupload_requested_by?: string | null
+          review_notes?: string | null
           shift?: string | null
           staff_name?: string | null
           staff_user_id: string
@@ -1241,13 +1259,22 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           checklist_id?: string
           created_at?: string
           gps_lat?: number | null
           gps_lng?: number | null
           id?: string
+          locked?: boolean
           merchant_id?: string
           overall_score?: number | null
+          parent_submission_id?: string | null
+          reupload_count?: number
+          reupload_item_ids?: string[]
+          reupload_requested_at?: string | null
+          reupload_requested_by?: string | null
+          review_notes?: string | null
           shift?: string | null
           staff_name?: string | null
           staff_user_id?: string
@@ -1304,6 +1331,7 @@ export type Database = {
       }
       checklists: {
         Row: {
+          ai_confidence_threshold: number
           category: string | null
           created_at: string
           created_by: string | null
@@ -1322,6 +1350,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ai_confidence_threshold?: number
           category?: string | null
           created_at?: string
           created_by?: string | null
@@ -1340,6 +1369,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ai_confidence_threshold?: number
           category?: string | null
           created_at?: string
           created_by?: string | null
@@ -7663,6 +7693,10 @@ export type Database = {
           store_id: string
         }[]
       }
+      checklist_submission_is_unlocked: {
+        Args: { _sub_id: string }
+        Returns: boolean
+      }
       delete_store_cascade: { Args: { p_store_id: string }; Returns: undefined }
       expire_old_quotations: { Args: never; Returns: number }
       generate_demand_forecast: {
@@ -8870,6 +8904,7 @@ export type Database = {
         | "ai_fail"
         | "approved"
         | "rejected"
+        | "review_required"
       cycle_count_frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY"
       grn_status: "DRAFT" | "PARTIAL" | "COMPLETED" | "CANCELLED"
       kot_station: "kitchen" | "bar" | "other"
@@ -9107,6 +9142,7 @@ export const Constants = {
         "ai_fail",
         "approved",
         "rejected",
+        "review_required",
       ],
       cycle_count_frequency: ["DAILY", "WEEKLY", "MONTHLY", "QUARTERLY"],
       grn_status: ["DRAFT", "PARTIAL", "COMPLETED", "CANCELLED"],
