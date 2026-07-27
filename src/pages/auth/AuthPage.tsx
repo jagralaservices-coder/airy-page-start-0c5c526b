@@ -117,6 +117,12 @@ const AuthPage: React.FC = () => {
   const isStaffIdentifier = (value: string) => /^[0-9]{8}$/.test(value.trim()) || /^(STF|MGR|CSH)[0-9]{5}$/i.test(value.trim());
 
   const applyStaffFunctionSession = (data: any, fallbackEmail: string) => {
+    console.info('[STAFF_AUTH] STAFF FOUND src/pages/auth/AuthPage.tsx:120', {
+      auth_user_id: data.user_id || null,
+      role_id: data.staff_role_id || data.role_id || null,
+      role: data.role || null,
+    });
+
     localStorage.setItem('pos_active_store_data', JSON.stringify({
       id: data.store_id,
       storeId: data.store_id,
@@ -158,6 +164,11 @@ const AuthPage: React.FC = () => {
       merchant_id: data.merchant_id || data.customer_id,
     }));
     window.dispatchEvent(new CustomEvent('pos:active-store-changed'));
+    console.info('[STAFF_AUTH] STORE FOUND src/pages/auth/AuthPage.tsx:166', {
+      store_id: data.store_id || null,
+      store_name: data.store_name || null,
+      merchant_id: data.merchant_id || data.customer_id || null,
+    });
   };
 
   const goToStaffDashboard = () => {
@@ -171,6 +182,20 @@ const AuthPage: React.FC = () => {
   };
 
   const hydrateStaffAuthSession = async (staffData: any, rawPassword: string) => {
+    if (staffData?.session?.access_token && staffData?.session?.refresh_token) {
+      const { error } = await supabase.auth.setSession({
+        access_token: staffData.session.access_token,
+        refresh_token: staffData.session.refresh_token,
+      });
+      if (!error) {
+        console.info('[STAFF_AUTH] SESSION FOUND src/pages/auth/AuthPage.tsx:181', {
+          auth_user_id: staffData.session.user?.id || staffData.user_id || null,
+        });
+        return true;
+      }
+      console.warn('[STAFF_AUTH] SESSION LOST src/pages/auth/AuthPage.tsx:186', { error: error.message });
+    }
+
     const staffEmail = String(staffData?.email || '').trim().toLowerCase();
     if (!staffEmail) return false;
 
@@ -186,8 +211,12 @@ const AuthPage: React.FC = () => {
         email: staffEmail,
         password: candidate,
       });
-      if (!error && data?.session) return true;
+      if (!error && data?.session) {
+        console.info('[STAFF_AUTH] SESSION FOUND src/pages/auth/AuthPage.tsx:203', { auth_user_id: data.session.user.id });
+        return true;
+      }
     }
+    console.warn('[STAFF_AUTH] SESSION LOST src/pages/auth/AuthPage.tsx:207', { auth_user_id: staffData?.user_id || null });
     return false;
   };
 
@@ -199,12 +228,12 @@ const AuthPage: React.FC = () => {
     localStorage.removeItem('pos_user_role_backup');
     localStorage.removeItem('pos_customer_backup');
     localStorage.removeItem('pos_store_backup');
+    localStorage.removeItem('pos_is_store_login');
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
         localStorage.removeItem(key);
       }
     });
-    try { await supabase.auth.signOut({ scope: 'local' } as any); } catch (_) {}
     Object.keys(localStorage).forEach((key) => {
       if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
         localStorage.removeItem(key);
@@ -232,6 +261,7 @@ const AuthPage: React.FC = () => {
     }
     setIsLoading(true);
     try {
+      console.info('[STAFF_AUTH] LOGIN START src/pages/auth/AuthPage.tsx:235', { identifier: trimmedEmail });
       if (!trimmedEmail.includes('@')) {
         if (isStaffIdentifier(trimmedEmail)) {
           let staffAttemptError = 'Invalid Staff ID or PIN';
@@ -242,9 +272,17 @@ const AuthPage: React.FC = () => {
 
             if (!staffError && staffData?.success) {
               await clearBrowserAuthForStaffSession();
+              const hydrated = await hydrateStaffAuthSession(staffData, trimmedPassword);
+              if (!hydrated) {
+                setIsLoading(false);
+                setLoginErrorMsg('Staff session could not be created. Please reset this staff PIN.');
+                toast({ title: t('auth.loginFailed'), description: 'Staff session could not be created. Please reset this staff PIN.', variant: 'destructive' });
+                return;
+              }
               applyStaffFunctionSession(staffData, staffData.email || `${trimmedEmail}@maxora.local`);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
+              console.info('[STAFF_AUTH] REDIRECT DASHBOARD src/pages/auth/AuthPage.tsx:259', { path: '/staff-dashboard' });
               goToStaffDashboard();
               return;
             }
@@ -365,9 +403,17 @@ const AuthPage: React.FC = () => {
 
             if (!staffError && staffData?.success) {
               await clearBrowserAuthForStaffSession();
+              const hydrated = await hydrateStaffAuthSession(staffData, trimmedPassword);
+              if (!hydrated) {
+                setIsLoading(false);
+                setLoginErrorMsg('Staff session could not be created. Please reset this staff PIN.');
+                toast({ title: t('auth.loginFailed'), description: 'Staff session could not be created. Please reset this staff PIN.', variant: 'destructive' });
+                return;
+              }
               applyStaffFunctionSession(staffData, trimmedEmail);
               setIsLoading(false);
               toast({ title: 'Login successful', description: `Welcome ${staffData.name || 'Staff'}` });
+              console.info('[STAFF_AUTH] REDIRECT DASHBOARD src/pages/auth/AuthPage.tsx:390', { path: '/staff-dashboard' });
               goToStaffDashboard();
               return;
             }

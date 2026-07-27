@@ -276,7 +276,11 @@ serve(async (req) => {
       email: staffEmail,
       password,
       email_confirm: true,
-      user_metadata: { full_name: name }
+      user_metadata: {
+        full_name: name,
+        account_type: role || 'staff',
+        skip_default_role: true,
+      }
     })
 
     if (authError) {
@@ -301,7 +305,11 @@ serve(async (req) => {
         // Update the password so staff can login with the new credentials
         const { error: updateUserError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
           password,
-          user_metadata: { full_name: name }
+          user_metadata: {
+            full_name: name,
+            account_type: role || 'staff',
+            skip_default_role: true,
+          }
         })
 
         if (updateUserError) {

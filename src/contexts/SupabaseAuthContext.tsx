@@ -110,6 +110,19 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
     localStorage.removeItem('owner_store_selection_done');
   }, []);
 
+  const buildDiagnosticRole = useCallback((roleData: any, authUser?: User | null): UserRoleData => ({
+    id: roleData?.id || 'diagnostic-role',
+    user_id: roleData?.user_id || authUser?.id || 'diagnostic-user',
+    role: roleData?.role || 'staff',
+    customer_id: roleData?.customer_id || roleData?.merchant_id || null,
+    merchant_id: roleData?.merchant_id || roleData?.customer_id || null,
+    store_id: roleData?.store_id || null,
+    staff_code: roleData?.staff_code || null,
+    ref_code: roleData?.ref_code || null,
+    pin: roleData?.pin || null,
+    is_active: roleData?.is_active ?? true,
+  }), []);
+
   const markAccountSuspended = useCallback(async () => {
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/pos')) {
       console.warn('[Auth] Suppressed account suspension because user is in POS mode');
@@ -242,6 +255,11 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
           condition: '!roleData && roleRows.length > 0',
           reason: 'User has roles but none evaluate to active'
         });
+        if (activeRows.some((r: any) => ['staff', 'store_manager', 'cashier'].includes(String(r.role)))) {
+          console.warn('[STAFF_AUTH] ROLE NOT FOUND src/contexts/SupabaseAuthContext.tsx:252', { userId, reason: 'no_active_staff_role_after_filter' });
+          clearRoleState();
+          return null;
+        }
         await markAccountSuspended();
         return null;
       }
@@ -276,6 +294,15 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
                 approvalStatus: (customerData as any).approval_status,
                 condition: 'isStatusSuspended(customerData.is_active, customerData.approval_status)'
               });
+              if (['staff', 'store_manager', 'cashier'].includes(roleRecord.role)) {
+                console.warn('[STAFF_AUTH] MERCHANT FOUND src/contexts/SupabaseAuthContext.tsx:307', {
+                  userId,
+                  merchantId: roleRecord.merchant_id,
+                  suspended: true,
+                });
+                setUserRole(roleRecord);
+                return roleRecord;
+              }
               await markAccountSuspended();
               return null;
             }
@@ -305,6 +332,15 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
                 approvalStatus: (merchantData as any).approval_status,
                 condition: 'isStatusSuspended(merchantData.is_active, merchantData.approval_status)'
               });
+              if (['staff', 'store_manager', 'cashier'].includes(roleRecord.role)) {
+                console.warn('[STAFF_AUTH] STORE FOUND src/contexts/SupabaseAuthContext.tsx:339', {
+                  userId,
+                  storeId: roleRecord.store_id,
+                  suspended: true,
+                });
+                setUserRole(roleRecord);
+                return roleRecord;
+              }
               await markAccountSuspended();
               return null;
             }
@@ -360,7 +396,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
               try { window.dispatchEvent(new CustomEvent('pos:store-changed', { detail: { storeId: storeData.id } })); } catch {}
             }
 
-            if (roleRecord.role === 'staff') {
+            if (roleRecord.role === 'staff' || roleRecord.role === 'store_manager' || roleRecord.role === 'cashier') {
               localStorage.setItem('pos_staff_session', JSON.stringify({
                 id: userId,
                 user_id: userId,
@@ -375,17 +411,42 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
                 merchant_id: (storeData as any).merchant_id,
                 staff_code: roleRecord.staff_code || null,
               }));
+              localStorage.setItem('pos_staff_login_mode', 'true');
+              console.info('[STAFF_AUTH] USER ROLE FOUND src/contexts/SupabaseAuthContext.tsx:388', {
+                auth_user_id: userId,
+                role: roleRecord.role,
+                role_id: roleRecord.id,
+              });
+              console.info('[STAFF_AUTH] STORE FOUND src/contexts/SupabaseAuthContext.tsx:394', {
+                store_id: storeData.id,
+                merchant_id: (storeData as any).merchant_id,
+              });
             } else {
               localStorage.removeItem('pos_staff_session');
             }
           } else {
             setStore(null);
             localStorage.removeItem('pos_active_store_data');
+            if (['staff', 'store_manager', 'cashier'].includes(roleRecord.role)) {
+              console.warn('[STAFF_AUTH] STORE NOT FOUND src/contexts/SupabaseAuthContext.tsx:405', {
+                auth_user_id: userId,
+                store_id: roleRecord.store_id,
+                error: storeError?.message || null,
+              });
+              return roleRecord;
+            }
             localStorage.removeItem('pos_staff_session');
           }
         } else {
           setStore(null);
           localStorage.removeItem('pos_active_store_data');
+          if (['staff', 'store_manager', 'cashier'].includes(roleRecord.role)) {
+            console.warn('[STAFF_AUTH] STORE NOT FOUND src/contexts/SupabaseAuthContext.tsx:418', {
+              auth_user_id: userId,
+              reason: 'role_has_no_store_id',
+            });
+            return roleRecord;
+          }
           localStorage.removeItem('pos_staff_session');
         }
 
@@ -478,16 +539,6 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const applySession = (nextSession: Session | null) => {
       if (!isMounted) return;
-
-      if (hasLocalStaffSession()) {
-        clearStoredAuthTokens();
-        dropSessionBackups();
-        setSession(null);
-        setUser(null);
-        clearRoleState();
-        setIsLoading(false);
-        return;
-      }
 
       let finalSession = nextSession;
       let finalUser = nextSession?.user ?? null;
@@ -583,8 +634,8 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
 
         const sessionActive = localStorage.getItem('pos_session_active') === 'true';
-        if (event === 'SIGNED_OUT' && (sessionActive || localStorage.getItem('pos_login_as_demo') === 'true')) {
-          console.log('[Auth] Prevented automatic sign out event');
+        if (event === 'SIGNED_OUT' && (sessionActive || hasLocalStaffSession() || localStorage.getItem('pos_login_as_demo') === 'true')) {
+          console.warn('[STAFF_AUTH] AUTO LOGOUT TRIGGERED src/contexts/SupabaseAuthContext.tsx:600', { prevented: true, event });
           return;
         }
 
@@ -596,20 +647,6 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
         applySession(nextSession);
       }
     );
-
-
-    if (hasLocalStaffSession()) {
-      clearStoredAuthTokens();
-      dropSessionBackups();
-      setSession(null);
-      setUser(null);
-      clearRoleState();
-      setIsLoading(false);
-      return () => {
-        isMounted = false;
-        subscription.unsubscribe();
-      };
-    }
 
     void supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
@@ -790,7 +827,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
       const roleRecord = roleData as unknown as UserRoleData | undefined;
 
       if (!roleRecord) {
-        await supabase.auth.signOut();
+        console.warn('[STAFF_AUTH] ROLE NOT FOUND src/contexts/SupabaseAuthContext.tsx:801', { auth_user_id: authData.user.id });
         if (localStorage.getItem('pos_account_suspended') === 'true') {
           return { error: 'Your account has been suspended. Please contact the administrator.' };
         }
@@ -798,12 +835,16 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
 
       if (!isStatusActive(roleRecord.is_active)) {
-        await supabase.auth.signOut();
+        if (['staff', 'store_manager', 'cashier'].includes(roleRecord.role)) {
+          console.warn('[STAFF_AUTH] USER ROLE FOUND src/contexts/SupabaseAuthContext.tsx:810', { auth_user_id: authData.user.id, role: roleRecord.role, inactive: true });
+          setUserRole(buildDiagnosticRole(roleRecord, authData.user));
+          return { error: 'This staff account is inactive. Please contact admin.', role: roleRecord.role };
+        }
         return { error: 'Your account has been suspended. Please contact the administrator.' };
       }
 
-      if ((roleRecord.role === 'store_manager' || roleRecord.role === 'staff') && !roleRecord.store_id) {
-        await supabase.auth.signOut();
+      if ((roleRecord.role === 'store_manager' || roleRecord.role === 'staff' || roleRecord.role === 'cashier') && !roleRecord.store_id) {
+        console.warn('[STAFF_AUTH] STORE NOT FOUND src/contexts/SupabaseAuthContext.tsx:819', { auth_user_id: authData.user.id, role: roleRecord.role });
         clearRoleState();
         return { error: 'This account is not linked to any store.' };
       }
