@@ -128,7 +128,17 @@ export const OperationsPage: React.FC = () => {
   const isStoreLogin = localStorage.getItem('pos_is_store_login') === 'true';
   const isOwner = userRole?.role === 'owner' || userRole?.role === 'merchant' || userRole?.role === 'admin' || userRole?.role === 'super_admin';
   const isAdmin = userRole?.role === 'admin' || userRole?.role === 'super_admin';
-  const canUseOwnerChecklist = ['owner', 'merchant', 'admin', 'super_admin'].includes(userRole?.role ?? '');
+  const cachedRole = useMemo(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('pos_user_role_backup') || 'null');
+      return parsed?.role ?? null;
+    } catch {
+      return null;
+    }
+  }, [userRole?.role]);
+  const hasStaffScopedSession = Boolean(localStorage.getItem('pos_staff_session')) || localStorage.getItem('pos_staff_login_mode') === 'true';
+  const effectiveRole = userRole?.role ?? cachedRole;
+  const canUseOwnerChecklist = ['owner', 'merchant', 'admin', 'super_admin'].includes(effectiveRole ?? '') || (isStoreLogin && !hasStaffScopedSession && effectiveRole !== 'cashier');
   const { canAccess, requiresUpgrade } = useSubscription();
   const { getOperationsOrder, reorderOperations } = useUICustomization();
 
@@ -171,6 +181,7 @@ export const OperationsPage: React.FC = () => {
     // Dashboard - Always first
     { id: 'dashboard', icon: LayoutDashboard, label: t('operations.dashboard'), path: '/dashboard' },
     { id: 'payment-gateway', icon: CreditCard, label: 'Payment Gateway', path: '/settings/payment-integrations' },
+    ...(canUseOwnerChecklist ? [{ id: 'checklists', icon: ClipboardList, label: 'Checklist', path: '/checklists' }] : []),
     { id: 'accounting', icon: Building, label: 'Accounting', path: '/accounting' },
     // Quick Actions Row
     { id: 'menu', icon: UtensilsCrossed, label: t('operations.menu'), path: '/menu' },
@@ -215,7 +226,6 @@ export const OperationsPage: React.FC = () => {
     ...(canAccess('staffManagement') ? [
       { id: 'staff-settings', icon: UserCog, label: t('operations.staffSettings'), path: '/staff-settings' },
     ] : []),
-    ...(canUseOwnerChecklist ? [{ id: 'checklists', icon: ClipboardList, label: 'Checklist', path: '/checklists' }] : []),
     { id: 'help', icon: HelpCircle, label: t('operations.help'), path: '/support' },
     
     { id: 'lang-profiles', icon: Languages, label: t('operations.language'), path: '/owner-settings?view=locale' },
