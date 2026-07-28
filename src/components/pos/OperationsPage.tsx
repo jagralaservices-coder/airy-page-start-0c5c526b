@@ -128,7 +128,7 @@ export const OperationsPage: React.FC = () => {
   const isStoreLogin = localStorage.getItem('pos_is_store_login') === 'true';
   const isOwner = userRole?.role === 'owner' || userRole?.role === 'merchant' || userRole?.role === 'admin' || userRole?.role === 'super_admin';
   const isAdmin = userRole?.role === 'admin' || userRole?.role === 'super_admin';
-  const canUseOwnerChecklist = !isStoreLogin && ['owner', 'merchant', 'admin', 'super_admin'].includes(userRole?.role ?? '');
+  const canUseOwnerChecklist = ['owner', 'merchant', 'admin', 'super_admin'].includes(userRole?.role ?? '');
   const { canAccess, requiresUpgrade } = useSubscription();
   const { getOperationsOrder, reorderOperations } = useUICustomization();
 

@@ -128,7 +128,7 @@ export const MobileHeader: React.FC = () => {
   // Determine which menu items to show
   const getAccessibleMenuItems = () => {
     if (isStaffLoggedIn) return staffMenuItems;
-    const filtered = isStoreLogin
+    const filtered = isStoreLogin && !(isAuthenticated && userRole)
       ? menuItems.filter(item => !(item as any).hideForStoreLogin)
       : menuItems.filter(item => hasRole(item.roles as any[]));
     return filtered.filter(item => !item.featureKey || canAccess(item.featureKey));
