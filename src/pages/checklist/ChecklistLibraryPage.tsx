@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Copy, ClipboardList } from 'lucide-react';
+import { Plus, Pencil, Trash2, Copy, ClipboardList, FileText, Users, Clock3, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useMerchant } from '@/contexts/MerchantContext';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
-import { useChecklists, useInvalidateChecklists, logChecklistActivity } from '@/hooks/checklist/useChecklistData';
+import { useAssignments, useChecklists, useInvalidateChecklists, logChecklistActivity, useSubmissions, useTemplates } from '@/hooks/checklist/useChecklistData';
 import { toast } from 'sonner';
 import { NewChecklistDialog } from '@/components/checklist/NewChecklistDialog';
 
@@ -19,6 +19,9 @@ const ChecklistLibraryPage: React.FC = () => {
   const { user } = useSupabaseAuth();
   const nav = useNavigate();
   const { data: lists = [], isLoading } = useChecklists();
+  const { data: templates = [], isLoading: templatesLoading } = useTemplates();
+  const { data: assignments = [], isLoading: assignmentsLoading } = useAssignments();
+  const { data: submissions = [], isLoading: submissionsLoading } = useSubmissions();
   const invalidate = useInvalidateChecklists();
 
   const [search, setSearch] = useState('');
@@ -28,6 +31,18 @@ const ChecklistLibraryPage: React.FC = () => {
     () => lists.filter((c: any) => c.name.toLowerCase().includes(search.toLowerCase())),
     [lists, search]
   );
+
+  const pendingApprovals = useMemo(
+    () => (submissions as any[]).filter((s) => ['pending', 'review_required', 'ai_fail'].includes(s.status)),
+    [submissions]
+  );
+
+  const completedChecklists = useMemo(
+    () => (submissions as any[]).filter((s) => ['ai_pass', 'approved', 'rejected'].includes(s.status)),
+    [submissions]
+  );
+
+  const isPageLoading = isLoading || templatesLoading || assignmentsLoading || submissionsLoading;
 
   const createNew = async (payload: { name: string; shift_type: string; frequency: string }) => {
     if (!merchantId || !user?.id) { toast.error('Not signed in'); return; }
@@ -109,7 +124,46 @@ const ChecklistLibraryPage: React.FC = () => {
         <Link to="/checklists/audit"><Button variant="outline">Audit log</Button></Link>
       </div>
 
-      {isLoading ? (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="bg-card/60 backdrop-blur rounded-2xl">
+          <CardContent className="p-4 flex items-center gap-3">
+            <FileText className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Checklist Templates</p>
+              <p className="text-xl font-bold">{templates.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/60 backdrop-blur rounded-2xl">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Users className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Assigned Checklists</p>
+              <p className="text-xl font-bold">{assignments.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/60 backdrop-blur rounded-2xl">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Clock3 className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Pending Approvals</p>
+              <p className="text-xl font-bold">{pendingApprovals.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/60 backdrop-blur rounded-2xl">
+          <CardContent className="p-4 flex items-center gap-3">
+            <CheckCircle2 className="h-5 w-5 text-primary" />
+            <div>
+              <p className="text-xs text-muted-foreground">Completed Checklists</p>
+              <p className="text-xl font-bold">{completedChecklists.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {isPageLoading ? (
         <div className="text-muted-foreground">Loading…</div>
       ) : filtered.length === 0 ? (
         <Card className="bg-card/60 backdrop-blur rounded-2xl">

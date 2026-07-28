@@ -79,15 +79,13 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { getAppSidebarOrder, reorderAppSidebar } = useUICustomization();
   const isStoreLogin = posContext?.isStoreLogin ?? false;
   const logoutStore = posContext?.logoutStore ?? (() => {});
+  const isOwnerChecklistRole = ['super_admin', 'admin', 'owner', 'merchant'].includes(userRole?.role ?? '');
   const [reportsOpen, setReportsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [cashierSession, setCashierSession] = useState<CashierSession | null>(getCashierSession());
-  const isChecklistStaffMode = !!cashierSession || userRole?.role === 'staff' || userRole?.role === 'cashier';
-  const checklistPath = isChecklistStaffMode ? '/staff/checklists' : '/checklists';
-  const checklistLabel = isChecklistStaffMode ? 'My Checklists' : 'Checklists';
 
   React.useEffect(() => {
     const onChange = (e: any) => setCashierSession(e?.detail ?? null);
@@ -117,14 +115,9 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
     {
       path: '/checklists',
       icon: ClipboardList,
-      label: 'Checklists',
-      allowedRoles: ['admin', 'owner', 'store_manager', 'merchant']
-    },
-    {
-      path: '/staff/checklists',
-      icon: ClipboardList,
-      label: 'My Checklists',
-      allowedRoles: ['staff', 'cashier']
+      label: 'Checklist',
+      allowedRoles: ['super_admin', 'admin', 'owner', 'merchant'],
+      hideForStoreLogin: true
     },
     { 
       path: '/reports', 
@@ -158,6 +151,11 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 
   // Filter items based on role OR store login
   const accessibleItems = navItems.filter(item => {
+    // Checklist is an owner-management module and must not be hidden by stale store-login/customization state.
+    if (item.path === '/checklists') {
+      return isOwnerChecklistRole;
+    }
+
     // Hide features restricted by subscription plan
     if (item.featureKey && !canAccess(item.featureKey)) return false;
     
@@ -191,11 +189,9 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   // Sort by saved order
   const savedOrder = getAppSidebarOrder();
   const sortedAccessibleItems = useMemo(() => {
-    const itemsWithoutChecklist = accessibleItems.filter(
-      item => item.path !== '/checklists' && item.path !== '/staff/checklists'
-    );
-    if (savedOrder.length === 0) return itemsWithoutChecklist;
-    return [...itemsWithoutChecklist].sort((a, b) => {
+    const checklistItem = accessibleItems.find(item => item.path === '/checklists');
+    const sortableItems = accessibleItems.filter(item => item.path !== '/checklists');
+    const sortedItems = savedOrder.length === 0 ? [...sortableItems] : [...sortableItems].sort((a, b) => {
       const aIdx = savedOrder.findIndex(o => o.id === a.path.replace('/', ''));
       const bIdx = savedOrder.findIndex(o => o.id === b.path.replace('/', ''));
       if (aIdx === -1 && bIdx === -1) return 0;
@@ -203,6 +199,16 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       if (bIdx === -1) return -1;
       return aIdx - bIdx;
     });
+
+    if (!checklistItem) return sortedItems;
+
+    const operationsIndex = sortedItems.findIndex(item => item.path === '/operations');
+    const insertAt = operationsIndex >= 0 ? operationsIndex + 1 : sortedItems.length;
+    return [
+      ...sortedItems.slice(0, insertAt),
+      checklistItem,
+      ...sortedItems.slice(insertAt),
+    ];
   }, [accessibleItems, savedOrder]);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -305,20 +311,6 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         {/* Navigation */}
         <nav className="flex-1 py-2 overflow-y-auto no-scrollbar">
           <ul className="space-y-0.5 px-2">
-            <li>
-              <Link
-                to={isEditMode ? '#' : checklistPath}
-                onClick={(e) => { if (isEditMode) e.preventDefault(); }}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 border border-primary/30 bg-primary/10 text-sidebar-foreground hover:bg-sidebar-accent',
-                  (location.pathname === checklistPath || location.pathname.startsWith(checklistPath + '/')) && 'bg-sidebar-accent text-foreground',
-                  collapsed && 'justify-center px-2'
-                )}
-              >
-                <ClipboardList className="w-5 h-5 flex-shrink-0" />
-                {!collapsed && <span className="font-medium text-sm">{checklistLabel}</span>}
-              </Link>
-            </li>
             {sortedAccessibleItems.map((item, index) => {
               const isActive = location.pathname === item.path || 
                 location.pathname.startsWith(item.path + '/');

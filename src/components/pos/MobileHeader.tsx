@@ -111,6 +111,7 @@ export const MobileHeader: React.FC = () => {
     { path: '/qr-orders', icon: QrCode, labelKey: 'Menu Orders', roles: ['super_admin', 'admin', 'owner', 'store_manager'], featureKey: 'qrMenuOrdering' },
     { path: '/delivery', icon: Truck, labelKey: 'nav.delivery', roles: ['super_admin', 'admin', 'owner', 'store_manager'], featureKey: 'deliveryTracking' },
     { path: '/operations', icon: Wrench, labelKey: 'nav.operations', roles: ['super_admin', 'admin', 'owner', 'store_manager'], featureKey: '' },
+    { path: '/checklists', icon: ClipboardList, labelKey: 'Checklist', roles: ['super_admin', 'admin', 'owner', 'merchant'], featureKey: '', hideForStoreLogin: true },
     { path: '/chat', icon: MessageCircle, labelKey: 'common.teamChat', roles: ['super_admin', 'admin', 'owner', 'store_manager'], featureKey: 'teamChat' },
     { path: '/settings', icon: Settings, labelKey: 'nav.settings', roles: ['super_admin', 'admin', 'owner', 'store_manager'], featureKey: '' },
   ];
@@ -127,7 +128,9 @@ export const MobileHeader: React.FC = () => {
   // Determine which menu items to show
   const getAccessibleMenuItems = () => {
     if (isStaffLoggedIn) return staffMenuItems;
-    const filtered = isStoreLogin ? menuItems : menuItems.filter(item => hasRole(item.roles as any[]));
+    const filtered = isStoreLogin && !(isAuthenticated && userRole)
+      ? menuItems.filter(item => !(item as any).hideForStoreLogin)
+      : menuItems.filter(item => hasRole(item.roles as any[]));
     return filtered.filter(item => !item.featureKey || canAccess(item.featureKey));
   };
 
@@ -280,7 +283,7 @@ export const MobileHeader: React.FC = () => {
                     className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-secondary transition-colors"
                   >
                     <item.icon className="w-6 h-6 text-muted-foreground" />
-                    <span className="font-medium">{t(item.labelKey)}</span>
+                    <span className="font-medium">{item.labelKey === 'Checklist' ? 'Checklist' : t(item.labelKey)}</span>
                   </button>
                 ))}
 
