@@ -79,6 +79,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { getAppSidebarOrder, reorderAppSidebar } = useUICustomization();
   const isStoreLogin = posContext?.isStoreLogin ?? false;
   const logoutStore = posContext?.logoutStore ?? (() => {});
+  const isOwnerChecklistRole = ['super_admin', 'admin', 'owner', 'merchant'].includes(userRole?.role ?? '');
   const [reportsOpen, setReportsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -150,6 +151,11 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 
   // Filter items based on role OR store login
   const accessibleItems = navItems.filter(item => {
+    // Checklist is an owner-management module and must not be hidden by stale store-login/customization state.
+    if (item.path === '/checklists') {
+      return isOwnerChecklistRole;
+    }
+
     // Hide features restricted by subscription plan
     if (item.featureKey && !canAccess(item.featureKey)) return false;
     
