@@ -126,8 +126,9 @@ export const OperationsPage: React.FC = () => {
   
   // Check if store login mode
   const isStoreLogin = localStorage.getItem('pos_is_store_login') === 'true';
-  const isOwner = userRole?.role === 'owner' || userRole?.role === 'admin' || userRole?.role === 'super_admin';
+  const isOwner = userRole?.role === 'owner' || userRole?.role === 'merchant' || userRole?.role === 'admin' || userRole?.role === 'super_admin';
   const isAdmin = userRole?.role === 'admin' || userRole?.role === 'super_admin';
+  const canUseOwnerChecklist = !isStoreLogin && ['owner', 'merchant', 'admin', 'super_admin'].includes(userRole?.role ?? '');
   const { canAccess, requiresUpgrade } = useSubscription();
   const { getOperationsOrder, reorderOperations } = useUICustomization();
 
@@ -214,7 +215,7 @@ export const OperationsPage: React.FC = () => {
     ...(canAccess('staffManagement') ? [
       { id: 'staff-settings', icon: UserCog, label: t('operations.staffSettings'), path: '/staff-settings' },
     ] : []),
-    { id: 'checklists', icon: ClipboardList, label: 'Checklists', path: (userRole?.role === 'staff' || userRole?.role === 'cashier') ? '/staff/checklists' : '/checklists' },
+    ...(canUseOwnerChecklist ? [{ id: 'checklists', icon: ClipboardList, label: 'Checklist', path: '/checklists' }] : []),
     { id: 'help', icon: HelpCircle, label: t('operations.help'), path: '/support' },
     
     { id: 'lang-profiles', icon: Languages, label: t('operations.language'), path: '/owner-settings?view=locale' },
@@ -531,15 +532,8 @@ export const OperationsPage: React.FC = () => {
 
             {/* Operations Grid - Mobile Optimized */}
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 md:gap-3">
-              <button
-                onClick={() => navigate((userRole?.role === 'staff' || userRole?.role === 'cashier') ? '/staff/checklists' : '/checklists')}
-                className="flex flex-col items-center justify-center gap-1.5 md:gap-2 p-3 md:p-4 rounded-xl border border-primary/60 bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all duration-200 min-h-[80px] md:min-h-[100px] group touch-manipulation relative"
-              >
-                <ClipboardList className="w-6 h-6 md:w-8 md:h-8 text-primary transition-colors" />
-                <span className="text-[10px] md:text-xs text-center text-primary font-semibold leading-tight line-clamp-2">Checklists</span>
-              </button>
               {(() => {
-                const visibleOps = sortedOperations.filter(item => item.id !== 'checklists' && !(item.featureKey && !canAccess(item.featureKey)));
+                const visibleOps = sortedOperations.filter(item => !(item.featureKey && !canAccess(item.featureKey)));
                 return visibleOps.map((item, index) => (
                   <button
                     key={item.id}
@@ -552,6 +546,7 @@ export const OperationsPage: React.FC = () => {
                     className={cn(
                       "flex flex-col items-center justify-center gap-1.5 md:gap-2 p-3 md:p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 active:scale-95 transition-all duration-200 min-h-[80px] md:min-h-[100px] group touch-manipulation relative",
                       item.id === 'payment-gateway' && "border-primary/60 bg-primary/10 hover:bg-primary/20",
+                      item.id === 'checklists' && "border-primary/60 bg-primary/10 hover:bg-primary/20",
                       isEditMode && "cursor-grab active:cursor-grabbing ring-1 ring-primary/30",
                       dragOverIndex === index && "ring-2 ring-primary bg-primary/5"
                     )}
@@ -559,8 +554,8 @@ export const OperationsPage: React.FC = () => {
                     {isEditMode && (
                       <GripVertical className="w-3 h-3 text-muted-foreground absolute top-1 right-1" />
                     )}
-                    <item.icon className={cn("w-6 h-6 md:w-8 md:h-8 text-foreground group-hover:text-primary transition-colors", item.id === 'payment-gateway' && "text-primary")} />
-                    <span className={cn("text-[10px] md:text-xs text-center text-foreground font-medium leading-tight line-clamp-2", item.id === 'payment-gateway' && "text-primary font-semibold")}>{item.label}</span>
+                    <item.icon className={cn("w-6 h-6 md:w-8 md:h-8 text-foreground group-hover:text-primary transition-colors", (item.id === 'payment-gateway' || item.id === 'checklists') && "text-primary")} />
+                    <span className={cn("text-[10px] md:text-xs text-center text-foreground font-medium leading-tight line-clamp-2", (item.id === 'payment-gateway' || item.id === 'checklists') && "text-primary font-semibold")}>{item.label}</span>
                   </button>
                 ));
               })()}
