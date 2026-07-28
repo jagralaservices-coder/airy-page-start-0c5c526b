@@ -963,7 +963,7 @@ export const SupabaseAuthProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const hasRole = (roles: UserRole[]): boolean => {
     if (!userRole) return false;
-    return roles.includes(userRole.role);
+    return roles.includes(userRole.role) || (userRole.role === 'merchant' && roles.includes('owner'));
   };
 
   const isSuperAdmin = () => {
