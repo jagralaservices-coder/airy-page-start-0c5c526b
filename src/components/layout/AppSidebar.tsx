@@ -111,6 +111,18 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       label: 'Operations',
       allowedRoles: ['admin', 'owner', 'store_manager']
     },
+    {
+      path: '/checklists',
+      icon: ClipboardList,
+      label: 'Checklists',
+      allowedRoles: ['admin', 'owner', 'store_manager', 'merchant']
+    },
+    {
+      path: '/staff/checklists',
+      icon: ClipboardList,
+      label: 'My Checklists',
+      allowedRoles: ['staff', 'cashier']
+    },
     { 
       path: '/reports', 
       icon: BarChart3, 
@@ -132,18 +144,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       label: 'Cashier IDs',
       allowedRoles: ['admin', 'owner', 'store_manager']
     },
-    {
-      path: '/checklists',
-      icon: ClipboardList,
-      label: 'Checklists',
-      allowedRoles: ['admin', 'owner', 'store_manager', 'merchant']
-    },
-    {
-      path: '/staff/checklists',
-      icon: ClipboardList,
-      label: 'My Checklists',
-      allowedRoles: ['staff', 'cashier']
-    },
+
     { 
       path: '/settings', 
       icon: Settings, 
