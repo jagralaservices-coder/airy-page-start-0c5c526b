@@ -531,8 +531,15 @@ export const OperationsPage: React.FC = () => {
 
             {/* Operations Grid - Mobile Optimized */}
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 md:gap-3">
+              <button
+                onClick={() => navigate((userRole?.role === 'staff' || userRole?.role === 'cashier') ? '/staff/checklists' : '/checklists')}
+                className="flex flex-col items-center justify-center gap-1.5 md:gap-2 p-3 md:p-4 rounded-xl border border-primary/60 bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all duration-200 min-h-[80px] md:min-h-[100px] group touch-manipulation relative"
+              >
+                <ClipboardList className="w-6 h-6 md:w-8 md:h-8 text-primary transition-colors" />
+                <span className="text-[10px] md:text-xs text-center text-primary font-semibold leading-tight line-clamp-2">Checklists</span>
+              </button>
               {(() => {
-                const visibleOps = sortedOperations.filter(item => !(item.featureKey && !canAccess(item.featureKey)));
+                const visibleOps = sortedOperations.filter(item => item.id !== 'checklists' && !(item.featureKey && !canAccess(item.featureKey)));
                 return visibleOps.map((item, index) => (
                   <button
                     key={item.id}
