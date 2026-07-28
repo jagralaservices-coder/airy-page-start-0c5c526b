@@ -79,13 +79,34 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { getAppSidebarOrder, reorderAppSidebar } = useUICustomization();
   const isStoreLogin = posContext?.isStoreLogin ?? false;
   const logoutStore = posContext?.logoutStore ?? (() => {});
-  const isOwnerChecklistRole = ['super_admin', 'admin', 'owner', 'merchant'].includes(userRole?.role ?? '');
   const [reportsOpen, setReportsOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [cashierSession, setCashierSession] = useState<CashierSession | null>(getCashierSession());
+
+  const cachedRole = useMemo<UserRole | null>(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem('pos_user_role_backup') || 'null');
+      return parsed?.role ?? null;
+    } catch {
+      return null;
+    }
+  }, [userRole?.role]);
+
+  const hasStaffScopedSession = useMemo(() => {
+    try {
+      return Boolean(localStorage.getItem('pos_staff_session')) || localStorage.getItem('pos_staff_login_mode') === 'true';
+    } catch {
+      return false;
+    }
+  }, [userRole?.role, cashierSession]);
+
+  const effectiveRole = userRole?.role ?? cachedRole;
+  const isOwnerChecklistRole = ['super_admin', 'admin', 'owner', 'merchant'].includes(effectiveRole ?? '');
+  const isOwnerStoreLogin = !effectiveRole && isStoreLogin && !hasStaffScopedSession && !cashierSession;
+  const canShowOwnerChecklist = isOwnerChecklistRole || isOwnerStoreLogin;
 
   React.useEffect(() => {
     const onChange = (e: any) => setCashierSession(e?.detail ?? null);
@@ -153,7 +174,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const accessibleItems = navItems.filter(item => {
     // Checklist is an owner-management module and must not be hidden by stale store-login/customization state.
     if (item.path === '/checklists') {
-      return isOwnerChecklistRole;
+      return canShowOwnerChecklist;
     }
 
     // Hide features restricted by subscription plan
