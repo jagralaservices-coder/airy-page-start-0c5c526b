@@ -224,18 +224,22 @@ serve(async (req) => {
           status: order.status || 'completed',
           cancel_reason: order.cancelReason || order.cancel_reason || null,
           cancelled_at: order.cancelledAt || order.cancelled_at || null,
-          // Optional Cashier Billing Module tags (nullable columns on orders)
-          cashier_id: order.cashier_id || order.cashierId || null,
-          cashier_name: order.cashier_name || order.cashierName || null,
-          cashier_shift_id: order.cashier_shift_id || order.cashierShiftId || null,
-          device_name: order.device_name || order.deviceName || null,
           created_at: order.createdAt ? new Date(order.createdAt).toISOString() : new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
 
+        if (hasCashierColumns) {
+          // Optional Cashier Billing Module tags (nullable columns on orders)
+          row.cashier_id = order.cashier_id || order.cashierId || null;
+          row.cashier_name = order.cashier_name || order.cashierName || null;
+          row.cashier_shift_id = order.cashier_shift_id || order.cashierShiftId || null;
+          row.device_name = order.device_name || order.deviceName || null;
+        }
+
         if (hasPaymentBreakdown) {
           row.payment_breakdown = order.paymentBreakdown || order.payment_breakdown || null;
         }
+
 
         return row;
       });
