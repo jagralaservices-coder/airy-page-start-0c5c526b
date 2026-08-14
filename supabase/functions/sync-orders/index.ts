@@ -182,6 +182,21 @@ serve(async (req) => {
         // ignore - column not present yet
       }
 
+      // Dynamically detect if cashier columns exist in public.orders
+      let hasCashierColumns = false;
+      try {
+        const { error } = await supabaseAdmin
+          .from('orders')
+          .select('cashier_id,cashier_name,cashier_shift_id,device_name')
+          .limit(1);
+        if (!error) {
+          hasCashierColumns = true;
+        }
+      } catch (e) {
+        // ignore - columns not present yet
+      }
+
+
       const dbOrders = orders.map((order: any) => {
         const row: any = {
           id: toUUID(order.id || crypto.randomUUID()),
