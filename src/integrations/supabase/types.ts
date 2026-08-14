@@ -6436,6 +6436,7 @@ export type Database = {
           return_allow_exchange: boolean
           return_refund_pin_threshold: number
           state: string | null
+          store_code: string | null
           suspended_at: string | null
           suspended_by: string | null
           suspension_reason: string | null
@@ -6483,6 +6484,7 @@ export type Database = {
           return_allow_exchange?: boolean
           return_refund_pin_threshold?: number
           state?: string | null
+          store_code?: string | null
           suspended_at?: string | null
           suspended_by?: string | null
           suspension_reason?: string | null
@@ -6530,6 +6532,7 @@ export type Database = {
           return_allow_exchange?: boolean
           return_refund_pin_threshold?: number
           state?: string | null
+          store_code?: string | null
           suspended_at?: string | null
           suspended_by?: string | null
           suspension_reason?: string | null
