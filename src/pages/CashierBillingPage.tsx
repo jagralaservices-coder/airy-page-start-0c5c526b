@@ -95,24 +95,11 @@ export default function CashierBillingPage() {
     );
   }
 
-  // Authenticated cashier → render billing + slim badge
+  // Authenticated cashier → render billing (cashier badge lives in BillingHeader)
   return (
-    <div className="relative">
-      <div className="sticky top-0 z-40 flex items-center justify-between gap-2 px-3 py-1.5 bg-primary text-primary-foreground text-xs">
-        <div className="flex items-center gap-2 truncate">
-          <User className="h-3.5 w-3.5" />
-          <span className="font-semibold">{session.cashierName}</span>
-          <span className="opacity-80">· {session.cashierCode}</span>
-          <span className="opacity-60 hidden sm:inline">· Shift since {new Date(session.loginAt).toLocaleTimeString()}</span>
-        </div>
-        <Button size="sm" variant="secondary" className="h-7 px-2"
-          onClick={async () => { await logoutCashier(); setSession(null); }}>
-          <LogOut className="h-3.5 w-3.5 mr-1" /> Logout
-        </Button>
-      </div>
-      <Suspense fallback={<div className="p-6">Loading billing…</div>}>
-        <POSBillingPage />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="p-6">Loading billing…</div>}>
+      <POSBillingPage />
+    </Suspense>
   );
 }
+
