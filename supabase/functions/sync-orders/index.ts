@@ -113,7 +113,7 @@ serve(async (req) => {
     const auth = await authenticateRequest(req, supabaseAdmin, store_id, store_code)
     if (!auth.authorized) {
       console.warn('sync-orders auth denied:', auth.error || 'Unauthorized')
-      return new Response(JSON.stringify({ success: false, auth_error: true, error: auth.error || 'Unauthorized', orders: [] }),
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'auth', error: auth.error || 'Unauthorized', orders: [] }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
