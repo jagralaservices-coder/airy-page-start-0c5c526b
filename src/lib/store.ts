@@ -306,6 +306,9 @@ export interface InventoryItem {
   name: string;
   quantity: number;
   unit: string;
+  sku?: string;
+  category?: string;
+  price?: number;
   minStock: number;
   costPerUnit: number;
   costUnit?: string; // Unit for cost calculation (kg, g, ltr, ml, pcs)
