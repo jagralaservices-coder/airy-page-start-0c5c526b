@@ -35,7 +35,7 @@ export const ExpenseTracker: React.FC = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const synced = await syncExpenses(expenses);
+      const synced = await syncExpenses();
       setExpensesState(synced);
       toast.success('Expenses synced successfully');
     } catch (e) {

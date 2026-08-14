@@ -74,7 +74,7 @@ export const CreditLedger: React.FC = () => {
     }
     
     try {
-      const merged = await syncCreditLedger(local);
+      const merged = await syncCreditLedger();
       setEntries(merged);
     } catch (e) {
       console.warn('[Offline] Failed to sync credit entries, using local cache:', e);
@@ -132,7 +132,7 @@ export const CreditLedger: React.FC = () => {
     }
 
     try {
-      const allPayments = await syncCreditPayments(getCreditPayments());
+      const allPayments = await syncCreditPayments();
       const filtered = allPayments.filter(matchesEntry);
       setPayments(filtered);
     } catch (e) {

@@ -613,7 +613,7 @@ const AuthPage: React.FC = () => {
       keysToRemove.forEach(k => localStorage.removeItem(k));
       sessionStorage.clear();
 
-      const { error: signupError, data: signupData } = await signup(email, password, fullName, 'owner');
+      const { error: signupError, data: signupData } = await signup(email, password, fullName);
       if (signupError) throw new Error(signupError);
       
       await new Promise(resolve => setTimeout(resolve, 500));

@@ -329,7 +329,7 @@ export const MoreReportsPage: React.FC = () => {
     if (mode === 'csv') {
       downloadCSV(`${title}_${Date.now()}.csv`, headers, rows);
     } else {
-      printReport(title, dateLabel, headers, rows);
+      printReport({ title, dateRange: dateLabel }, [{ type: 'table', data: { headers, rows } }]);
     }
   };
 
