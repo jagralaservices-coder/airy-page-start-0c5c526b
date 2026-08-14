@@ -69,19 +69,25 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
     }
   }
 
-  // Path 2: Store code authentication
+  // Path 2: Store code authentication — check both UUID prefix AND actual store_code column
   if (store_code) {
-    const expectedCode = store_id.slice(0, 8).toUpperCase()
     const { data: storeData } = await supabaseAdmin
       .from('stores')
-      .select('id')
+      .select('id, store_code')
       .eq('id', store_id)
       .eq('is_active', true)
       .maybeSingle()
-    
-    if (storeData && store_code.toUpperCase() === expectedCode) return { authorized: true }
-    return { authorized: false, error: 'Invalid store credentials' }
+
+    const uuidPrefixCode = store_id.slice(0, 8).toUpperCase()
+    const dbStoreCode = (storeData as any)?.store_code?.toUpperCase()
+    const submittedCode = store_code.toUpperCase()
+
+    if (storeData && (submittedCode === uuidPrefixCode || submittedCode === dbStoreCode)) {
+      return { authorized: true }
+    }
+    // If store_code was sent but didn't match, fall through (don't hard-fail)
   }
+
 
   return { authorized: false, error: 'Authentication required' }
 
