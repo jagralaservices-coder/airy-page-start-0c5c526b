@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePOS } from '@/contexts/POSContext';
 import { useLocale } from '@/contexts/LocaleContext';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
 import { cn } from '@/lib/utils';
 import {
   Power,
@@ -21,7 +22,8 @@ import {
   User,
   Receipt,
   Wifi,
-  WifiOff
+  WifiOff,
+  BadgeCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,16 +31,29 @@ interface BillingHeaderProps {
   onMenuToggle?: () => void;
 }
 
+const CASHIER_SESSION_KEY = 'maxora_cashier_session_v1';
+
+const readCashierSession = (): { cashierName?: string } | null => {
+  try {
+    const raw = localStorage.getItem(CASHIER_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const BillingHeader: React.FC<BillingHeaderProps> = ({ onMenuToggle }) => {
   const navigate = useNavigate();
   const { orders, heldBills, isOnline, activeStore } = usePOS();
   const { t } = useLocale();
   const { canAccess } = useSubscription();
+  const auth = useSupabaseAuth();
   const [showMainMenu, setShowMainMenu] = useState(false);
   const [itemsEnabled, setItemsEnabled] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [onlineStatus, setOnlineStatus] = useState(navigator.onLine);
+  const [cashierSession, setCashierSession] = useState(readCashierSession);
 
   useEffect(() => {
     const handleOnline = () => setOnlineStatus(true);
@@ -50,6 +65,22 @@ export const BillingHeader: React.FC<BillingHeaderProps> = ({ onMenuToggle }) =>
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    const onSessionChange = (e: any) => setCashierSession(e?.detail ?? readCashierSession());
+    window.addEventListener('cashier:session-changed', onSessionChange as any);
+    return () => window.removeEventListener('cashier:session-changed', onSessionChange as any);
+  }, []);
+
+  const isAuthCashier = !!auth?.isCashier?.();
+  const cashierDisplayName =
+    cashierSession?.cashierName ||
+    (auth as any)?.profile?.full_name ||
+    (auth as any)?.userRole?.full_name ||
+    (auth as any)?.user?.email ||
+    'Cashier';
+  const showCashierBadge = !!cashierSession || isAuthCashier;
+
   
   const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'preparing');
   const recentOrders = orders.slice(-5);
@@ -84,18 +115,29 @@ export const BillingHeader: React.FC<BillingHeaderProps> = ({ onMenuToggle }) =>
           </button>
 
 
-          {/* Store Display - Single store only */}
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
-              activeStore 
-                ? "bg-primary/20 text-primary" 
-                : "bg-secondary"
+          {/* Store Display + Cashier badge */}
+          <div className="flex flex-col items-start gap-1">
+            <div
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
+                activeStore 
+                  ? "bg-primary/20 text-primary" 
+                  : "bg-secondary"
+              )}
+            >
+              <Store className="w-4 h-4" />
+              {activeStore ? activeStore.name : 'No Store'}
+            </div>
+
+            {showCashierBadge && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs">
+                <BadgeCheck className="w-3.5 h-3.5 text-amber-500" />
+                <span className="font-semibold text-amber-500">Cashier</span>
+                <span className="text-muted-foreground truncate max-w-[140px]">· {cashierDisplayName}</span>
+              </div>
             )}
-          >
-            <Store className="w-4 h-4" />
-            {activeStore ? activeStore.name : 'No Store'}
           </div>
+
 
           {/* Online/Offline Status */}
           <div
