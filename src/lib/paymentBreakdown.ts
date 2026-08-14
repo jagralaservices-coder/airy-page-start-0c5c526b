@@ -26,16 +26,23 @@ const createEmptyCounts = (): PaymentMethodCounts => ({ cash: 0, card: 0, upi: 0
 
 const parsePaymentBreakdown = (breakdown: any): Record<string, number> => {
   if (!breakdown) return {};
-  if (typeof breakdown === 'string') {
+  
+  // Robust nested string parsing (handles double-stringified JSON safely)
+  let current = breakdown;
+  let parseAttempts = 0;
+  while (typeof current === 'string' && parseAttempts < 5) {
     try {
-      breakdown = JSON.parse(breakdown);
+      const parsed = JSON.parse(current);
+      if (parsed === current) break;
+      current = parsed;
+      parseAttempts++;
     } catch {
-      return {};
+      break;
     }
   }
 
-  if (Array.isArray(breakdown)) {
-    return breakdown.reduce<Record<string, number>>((acc, item) => {
+  if (Array.isArray(current)) {
+    return current.reduce<Record<string, number>>((acc, item) => {
       if (!item || typeof item !== 'object') return acc;
       const method = String(item.method || '').toLowerCase().trim();
       const amount = Number(item.amount || 0);
@@ -45,8 +52,8 @@ const parsePaymentBreakdown = (breakdown: any): Record<string, number> => {
     }, {});
   }
 
-  if (typeof breakdown === 'object') {
-    return Object.entries(breakdown).reduce<Record<string, number>>((acc, [key, value]) => {
+  if (typeof current === 'object' && current !== null) {
+    return Object.entries(current).reduce<Record<string, number>>((acc, [key, value]) => {
       const method = String(key || '').toLowerCase().trim();
       const amount = Number(value || 0);
       if (!method || amount <= 0) return acc;
@@ -129,17 +136,30 @@ export const getPaymentAmountTotals = (order: Order): PaymentMethodAmounts => {
 export const parseOrderPaymentBreakdown = (dbOrder: any): Record<string, number> | undefined => {
   if (!dbOrder) return undefined;
   
+  // Helper to recursively parse stringified JSON if needed
+  const parseNested = (val: any) => {
+    let current = val;
+    let parseAttempts = 0;
+    while (typeof current === 'string' && parseAttempts < 5) {
+      try {
+        const parsed = JSON.parse(current);
+        if (parsed === current) break;
+        current = parsed;
+        parseAttempts++;
+      } catch {
+        break;
+      }
+    }
+    return current;
+  };
+
   // 1. Try payment_breakdown
   let pb = dbOrder.payment_breakdown || dbOrder.paymentBreakdown;
   if (pb) {
-    if (typeof pb === 'string') {
-      try {
-        pb = JSON.parse(pb);
-      } catch {}
-    }
+    pb = parseNested(pb);
     // If it's a nested object with "breakdown" key
     if (pb && typeof pb === 'object' && 'breakdown' in pb) {
-      pb = pb.breakdown;
+      pb = parseNested(pb.breakdown);
     }
     const parsed = parsePaymentBreakdown(pb);
     if (Object.keys(parsed).length > 0) return parsed;
@@ -148,14 +168,10 @@ export const parseOrderPaymentBreakdown = (dbOrder: any): Record<string, number>
   // 2. Try payment_details
   let pd = dbOrder.payment_details || dbOrder.paymentDetails;
   if (pd) {
-    if (typeof pd === 'string') {
-      try {
-        pd = JSON.parse(pd);
-      } catch {}
-    }
+    pd = parseNested(pd);
     // If it's a nested object with "breakdown" key
     if (pd && typeof pd === 'object' && 'breakdown' in pd) {
-      pd = pd.breakdown;
+      pd = parseNested(pd.breakdown);
     }
     const parsed = parsePaymentBreakdown(pd);
     if (Object.keys(parsed).length > 0) return parsed;

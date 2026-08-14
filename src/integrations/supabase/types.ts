@@ -14,6 +14,292 @@ export type Database = {
   }
   public: {
     Tables: {
+      checklist_assignments: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          department: string | null
+          id: string
+          role: string | null
+          staff_id: string | null
+          store_id: string | null
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          role?: string | null
+          staff_id?: string | null
+          store_id?: string | null
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          department?: string | null
+          id?: string
+          role?: string | null
+          staff_id?: string | null
+          store_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_assignments_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_item_responses: {
+        Row: {
+          ai_confidence_score: number | null
+          ai_reason: string | null
+          created_at: string
+          gps_location: Json | null
+          id: string
+          item_id: string
+          remarks: string | null
+          reviewer_comments: string | null
+          status: string
+          submission_id: string
+          timestamp: string | null
+          updated_at: string
+          uploaded_images: Json | null
+        }
+        Insert: {
+          ai_confidence_score?: number | null
+          ai_reason?: string | null
+          created_at?: string
+          gps_location?: Json | null
+          id?: string
+          item_id: string
+          remarks?: string | null
+          reviewer_comments?: string | null
+          status?: string
+          submission_id: string
+          timestamp?: string | null
+          updated_at?: string
+          uploaded_images?: Json | null
+        }
+        Update: {
+          ai_confidence_score?: number | null
+          ai_reason?: string | null
+          created_at?: string
+          gps_location?: Json | null
+          id?: string
+          item_id?: string
+          remarks?: string | null
+          reviewer_comments?: string | null
+          status?: string
+          submission_id?: string
+          timestamp?: string | null
+          updated_at?: string
+          uploaded_images?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_item_responses_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_items: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          description: string | null
+          id: string
+          instructions: string | null
+          is_required: boolean | null
+          max_image_count: number | null
+          min_image_count: number | null
+          order_index: number
+          requires_gps: boolean | null
+          requires_image: boolean | null
+          requires_remarks: boolean | null
+          requires_timestamp: boolean | null
+          sample_images: Json | null
+          task_name: string
+          updated_at: string
+          video_reference: string | null
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          instructions?: string | null
+          is_required?: boolean | null
+          max_image_count?: number | null
+          min_image_count?: number | null
+          order_index?: number
+          requires_gps?: boolean | null
+          requires_image?: boolean | null
+          requires_remarks?: boolean | null
+          requires_timestamp?: boolean | null
+          sample_images?: Json | null
+          task_name: string
+          updated_at?: string
+          video_reference?: string | null
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          instructions?: string | null
+          is_required?: boolean | null
+          max_image_count?: number | null
+          min_image_count?: number | null
+          order_index?: number
+          requires_gps?: boolean | null
+          requires_image?: boolean | null
+          requires_remarks?: boolean | null
+          requires_timestamp?: boolean | null
+          sample_images?: Json | null
+          task_name?: string
+          updated_at?: string
+          video_reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_items_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_submissions: {
+        Row: {
+          checklist_id: string
+          created_at: string
+          id: string
+          overall_score: number | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          staff_id: string | null
+          status: string
+          store_id: string | null
+          submitted_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          checklist_id: string
+          created_at?: string
+          id?: string
+          overall_score?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_id?: string | null
+          status?: string
+          store_id?: string | null
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          checklist_id?: string
+          created_at?: string
+          id?: string
+          overall_score?: number | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          staff_id?: string | null
+          status?: string
+          store_id?: string | null
+          submitted_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_submissions_checklist_id_fkey"
+            columns: ["checklist_id"]
+            isOneToOne: false
+            referencedRelation: "checklists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklists: {
+        Row: {
+          auto_approve_threshold: number | null
+          category: string | null
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          department: string | null
+          description: string | null
+          due_date: string | null
+          due_time: string | null
+          id: string
+          is_published: boolean | null
+          merchant_id: string
+          priority: string
+          repeat_type: string
+          status: string
+          store_id: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          auto_approve_threshold?: number | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          department?: string | null
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          is_published?: boolean | null
+          merchant_id: string
+          priority?: string
+          repeat_type?: string
+          status?: string
+          store_id?: string | null
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          auto_approve_threshold?: number | null
+          category?: string | null
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          department?: string | null
+          description?: string | null
+          due_date?: string | null
+          due_time?: string | null
+          id?: string
+          is_published?: boolean | null
+          merchant_id?: string
+          priority?: string
+          repeat_type?: string
+          status?: string
+          store_id?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklists_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounting_audit_log: {
         Row: {
           action: string

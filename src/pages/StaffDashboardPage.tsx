@@ -39,6 +39,7 @@ import { useBiometricAuth } from '@/hooks/useBiometricAuth';
 import AttendanceCalendar from '@/components/pos/AttendanceCalendar';
 import OvertimeReport from '@/components/pos/OvertimeReport';
 import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
+import { StaffChecklistsWidget } from '@/components/pos/StaffChecklistsWidget';
 
 interface StaffMember {
   id: string;
@@ -304,7 +305,9 @@ const StaffDashboardPage: React.FC = () => {
     checkOut,
     refreshAttendance,
     loadTodayAttendance,
-    applyAttendanceRecord
+    applyAttendanceRecord,
+    verifyLocation,
+    maxDistance
   } = useStaffAttendance(attendanceAuthUserId, staff?.store_id, undefined, attendanceMerchantId, workStartTime, workEndTime);
 
   const isSameLocalDay = (dateValue?: string | null) => {
@@ -668,6 +671,17 @@ const StaffDashboardPage: React.FC = () => {
     console.log('Starting face verification...');
     console.log('Stored face URL:', storedFaceUrl);
     
+    const locResult = await verifyLocation();
+    if (!locResult.success) {
+      toast({
+        title: verificationAction === 'checkin' ? 'Check-in Failed' : 'Check-out Failed',
+        description: locResult.error || `You must be within ${maxDistance}m of the store.`,
+        variant: 'destructive'
+      });
+      setIsVerifyingFace(false);
+      return;
+    }
+    
     try {
       // Convert blob to base64 - keep the full data URL for proper formatting
       const reader = new FileReader();
@@ -700,7 +714,7 @@ const StaffDashboardPage: React.FC = () => {
       } catch (err) {
         console.warn('Failed to fetch auth session for evidence logs', err);
       }
-
+ 
       const payload = {
         capturedFaceBase64: imageData,
         storedFaceUrl: storedFaceUrl,
@@ -709,8 +723,8 @@ const StaffDashboardPage: React.FC = () => {
         merchant_id: verificationContext.merchantId,
         staff_id: resolvedStaffId,
         staff_role_id: staff?.staff_role_id,
-        latitude: userLocation?.latitude ?? null,
-        longitude: userLocation?.longitude ?? null,
+        latitude: locResult.latitude ?? null,
+        longitude: locResult.longitude ?? null,
         isCheckOut: verificationAction === 'checkout'
       };
       
@@ -1152,7 +1166,7 @@ const StaffDashboardPage: React.FC = () => {
 
           <p className="text-xs text-muted-foreground text-center mt-3 flex items-center justify-center gap-1">
             <MapPin className="w-3 h-3" />
-            Location verified within 500m of store
+            Location verified within {maxDistance}m of the store
           </p>
 
           {hasActiveCheckIn && (
@@ -1237,6 +1251,7 @@ const StaffDashboardPage: React.FC = () => {
           )}
         </div>
 
+        <StaffChecklistsWidget />
         {/* Daily Tasks - Responsive */}
         <div className="bg-card rounded-xl sm:rounded-2xl border border-border p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">

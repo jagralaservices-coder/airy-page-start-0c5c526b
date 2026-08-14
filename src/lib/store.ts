@@ -606,118 +606,12 @@ const applyPendingSync = <T extends { id?: string | number, lastUpdated?: string
 // Setters fire-and-forget mirror writes to IndexedDB and enqueue per-record
 // sync jobs in the persistent queue. Failures never block the UI.
 const mirrorToIDB = (
-  table: 'orders' | 'credit_ledger' | 'customers' | 'menu_items' | 'inventory',
+  table: 'orders' | 'credit_ledger' | 'customers' | 'menu_items' | 'inventory' | 'expenses' | 'checklists',
   storeId: string,
   oldItems: any[],
   newItems: any[],
 ): void => {
-  // R4: refuse to mirror when there is no resolvable active store. This
-  // previously silently dropped sync queue entries, leaving data trapped in
-  // the local browser and producing empty Reports on other devices.
-  if (!storeId) {
-    emitStoreScopeError(`mirrorToIDB:${table}`, {
-      old_count: oldItems.length,
-      new_count: newItems.length,
-    });
-    return;
-  }
-  Promise.resolve().then(async () => {
-    try {
-      const idbMod = await import('./idb');
-      const queueMod = await import('./syncQueue');
-      const envMod = await import('./envelope');
-
-      // Diagnostic trace — every cloud-bound write logs the full identity
-      // tuple so a failed sync can be root-caused without instrumentation.
-      console.info('[StoreScope] mirrorToIDB', {
-        table,
-        store_id: storeId,
-        organization_id: envMod.getOrganizationId(),
-        updated_by: envMod.getUpdatedBySync(),
-        new_count: newItems.length,
-      });
-
-
-      const oldMap = new Map(oldItems.map((i: any) => [String(i?.id), i]));
-      const newMap = new Map(newItems.map((i: any) => [String(i?.id), i]));
-
-      // Phase 2 — pull existing envelopes so we can bump version_number
-      // only on actual changes and preserve it on no-op writes.
-      const tbl = (idbMod.idb as any)[table];
-      const ids = newItems.filter((i: any) => i && i.id != null).map((i: any) => String(i.id));
-      const prior = (await tbl.bulkGet(ids)) as (any | undefined)[];
-      const priorById = new Map<string, any>();
-      ids.forEach((id, i) => priorById.set(id, prior[i]));
-
-      const organization_id = envMod.getOrganizationId();
-      const session_id = envMod.getSessionId();
-      const updated_by = envMod.getUpdatedBySync();
-
-      const rows: any[] = [];
-      const upserts: any[] = [];
-      newMap.forEach((nv, id) => {
-        const ov = oldMap.get(id);
-        const priorEnv = priorById.get(id);
-        const snapOld = envMod.stableSnapshot(ov);
-        const snapNew = envMod.stableSnapshot(nv);
-        const changed = !ov || snapOld !== snapNew;
-
-        const prevVersion = priorEnv?.version_number || 0;
-        const version_number = changed ? prevVersion + 1 : (prevVersion || 1);
-
-        const storeIdFinal = storeId || String(nv.store_id || nv.storeId || '');
-        rows.push({
-          id: String(id),
-          store_id: storeIdFinal,
-          data: nv,
-          updated_at: nv.lastUpdated || nv.updated_at || new Date().toISOString(),
-          organization_id,
-          session_id,
-          version_number,
-          updated_by,
-        });
-
-        if (changed) {
-          upserts.push({
-            table, op: 'upsert' as const,
-            record_id: String(id),
-            store_id: storeIdFinal,
-            payload: nv,
-            organization_id,
-            session_id,
-            version_number,
-            updated_by,
-          });
-        }
-      });
-
-      if (rows.length) {
-        // Write envelopes directly (preserves new envelope fields)
-        await tbl.bulkPut(rows.map((r: any) => ({ ...r, table })));
-      }
-
-      const deletes: any[] = [];
-      oldMap.forEach((ov, id) => {
-        if (!newMap.has(id)) {
-          deletes.push({
-            table, op: 'delete' as const,
-            record_id: String(id),
-            store_id: storeId || String(ov.store_id || ov.storeId || ''),
-            payload: ov,
-            organization_id,
-            session_id,
-            updated_by,
-          });
-        }
-      });
-
-      if (upserts.length || deletes.length) {
-        await queueMod.enqueueMany([...upserts, ...deletes]);
-      }
-    } catch (e) {
-      console.warn('[IDB mirror] failed:', e);
-    }
-  });
+  // Cloud-only: local mirroring and sync queuing is completely disabled
 };
 
 
@@ -769,42 +663,44 @@ const emitStoreScopeError = (operation: string, extra?: Record<string, unknown>)
   } catch {}
 };
 
+// Cloud-only: In-memory store scope variables to prevent any local business data persistence
+let _inMemoryMenuItems: MenuItem[] = [];
+let _inMemoryCategories: Category[] = [];
+let _inMemoryOrders: Order[] = [];
+let _inMemoryHeldBills: HeldBill[] = [];
+let _inMemoryInventory: InventoryItem[] = [];
+let _inMemoryExpenses: Expense[] = [];
+let _inMemoryCustomers: Customer[] = [];
+let _inMemoryCreditLedger: CreditEntry[] = [];
+let _inMemoryCreditPayments: CreditPayment[] = [];
+
 export const getMenuItems = (): MenuItem[] => {
-  const items = storage.get(getScopedKey(STORAGE_KEYS.MENU_ITEMS), defaultMenuItems);
-  return items.filter(item => !['d1', 'd2', 'dr1', 'dr2', 'pz1', 'bg1', '1', '2', '3'].includes(item.id));
+  return _inMemoryMenuItems.filter(item => !['d1', 'd2', 'dr1', 'dr2', 'pz1', 'bg1', '1', '2', '3'].includes(item.id));
 };
 export const setMenuItems = (items: MenuItem[]) => {
-  const old = getMenuItems();
-  const newItems = applyPendingSync(items, old);
-  storage.set(getScopedKey(STORAGE_KEYS.MENU_ITEMS), newItems);
-  mirrorToIDB('menu_items', currentStoreScope(), old, newItems);
+  _inMemoryMenuItems = items;
 };
 
 export const getCategories = (): Category[] => {
-  const cats = storage.get(getScopedKey(STORAGE_KEYS.CATEGORIES), defaultCategories);
-  return cats.filter(cat => !['desserts', 'drinks', 'pizza', 'burgers'].includes(cat.id));
+  return _inMemoryCategories.filter(cat => !['desserts', 'drinks', 'pizza', 'burgers'].includes(cat.id));
 };
 export const setCategories = (categories: Category[]) => {
-  const newCats = applyPendingSync(categories, getCategories());
-  storage.set(getScopedKey(STORAGE_KEYS.CATEGORIES), newCats);
+  _inMemoryCategories = categories;
 };
 
 // Orders, held bills, inventory, expenses are store-scoped
-export const getOrders = (): Order[] => storage.get(getScopedKey(STORAGE_KEYS.ORDERS), []);
+export const getOrders = (): Order[] => _inMemoryOrders;
 export const setOrders = (orders: Order[]) => {
-  const old = getOrders();
-  const newOrders = applyPendingSync(orders, old);
-  storage.set(getScopedKey(STORAGE_KEYS.ORDERS), newOrders);
-  mirrorToIDB('orders', currentStoreScope(), old, newOrders);
+  _inMemoryOrders = orders;
 };
 export const addOrder = (order: Order) => {
-  const orders = getOrders();
-  orders.push(order);
-  setOrders(orders);
+  _inMemoryOrders.push(order);
 };
 
-export const getHeldBills = (): HeldBill[] => storage.get(getScopedKey(STORAGE_KEYS.HELD_BILLS), []);
-export const setHeldBills = (bills: HeldBill[]) => storage.set(getScopedKey(STORAGE_KEYS.HELD_BILLS), bills);
+export const getHeldBills = (): HeldBill[] => _inMemoryHeldBills;
+export const setHeldBills = (bills: HeldBill[]) => {
+  _inMemoryHeldBills = bills;
+};
 
 export const getTables = (): Table[] => storage.get(getScopedKey(STORAGE_KEYS.TABLES), defaultTables);
 export const setTables = (tables: Table[]) => storage.set(getScopedKey(STORAGE_KEYS.TABLES), tables);
@@ -812,63 +708,30 @@ export const setTables = (tables: Table[]) => storage.set(getScopedKey(STORAGE_K
 export const getStaff = (): Staff[] => storage.get(getScopedKey(STORAGE_KEYS.STAFF), []);
 export const setStaff = (staff: Staff[]) => storage.set(getScopedKey(STORAGE_KEYS.STAFF), staff);
 
-export const getInventory = (): InventoryItem[] => storage.get(getScopedKey(STORAGE_KEYS.INVENTORY), []);
+export const getInventory = (): InventoryItem[] => _inMemoryInventory;
 export const setInventory = (items: InventoryItem[]) => {
-  const old = getInventory();
-  const newItems = applyPendingSync(items, old);
-  storage.set(getScopedKey(STORAGE_KEYS.INVENTORY), newItems);
-  mirrorToIDB('inventory', currentStoreScope(), old, newItems);
+  _inMemoryInventory = items;
 };
 
-export const getExpenses = (): Expense[] => storage.get(getScopedKey(STORAGE_KEYS.EXPENSES), []);
+export const getExpenses = (): Expense[] => _inMemoryExpenses;
 export const setExpenses = (expenses: Expense[]) => {
-  const newItems = applyPendingSync(expenses, getExpenses());
-  storage.set(getScopedKey(STORAGE_KEYS.EXPENSES), newItems);
+  _inMemoryExpenses = expenses;
 };
 
-export const getCustomers = (): Customer[] => storage.get(getScopedKey(STORAGE_KEYS.CUSTOMERS), []);
+export const getCustomers = (): Customer[] => _inMemoryCustomers;
 export const setCustomers = (items: Customer[]) => {
-  const old = getCustomers();
-  const { customers: deduped, aliases } = dedupeCustomersWithAliases(items);
-  if (aliases.size > 0) {
-    const now = new Date().toISOString();
-    const orders = getOrders();
-    const rewrittenOrders = orders.map((order) => {
-      const mappedId = order.customerId ? aliases.get(String(order.customerId)) : undefined;
-      return mappedId ? { ...order, customerId: mappedId, pendingSync: true, lastUpdated: now } : order;
-    });
-    if (rewrittenOrders.some((order, index) => order !== orders[index])) {
-      storage.set(getScopedKey(STORAGE_KEYS.ORDERS), rewrittenOrders);
-      mirrorToIDB('orders', currentStoreScope(), orders, rewrittenOrders);
-    }
-
-    const ledger = getCreditLedger();
-    const rewrittenLedger = ledger.map((entry) => {
-      const mappedId = entry.customer_id ? aliases.get(String(entry.customer_id)) : undefined;
-      return mappedId ? { ...entry, customer_id: mappedId, pendingSync: true, lastUpdated: now, updated_at: now } : entry;
-    });
-    if (rewrittenLedger.some((entry, index) => entry !== ledger[index])) {
-      storage.set(getScopedKey(STORAGE_KEYS.CREDIT_LEDGER), rewrittenLedger);
-      mirrorToIDB('credit_ledger', currentStoreScope(), ledger, rewrittenLedger);
-    }
-  }
-  const newItems = applyPendingSync(deduped, old);
-  storage.set(getScopedKey(STORAGE_KEYS.CUSTOMERS), newItems);
-  mirrorToIDB('customers', currentStoreScope(), old, newItems);
+  const { customers: deduped } = dedupeCustomersWithAliases(items);
+  _inMemoryCustomers = deduped;
 };
 
-export const getCreditLedger = (): CreditEntry[] => storage.get(getScopedKey(STORAGE_KEYS.CREDIT_LEDGER), []);
+export const getCreditLedger = (): CreditEntry[] => _inMemoryCreditLedger;
 export const setCreditLedger = (items: CreditEntry[]) => {
-  const old = getCreditLedger();
-  const newItems = applyPendingSync(items, old);
-  storage.set(getScopedKey(STORAGE_KEYS.CREDIT_LEDGER), newItems);
-  mirrorToIDB('credit_ledger', currentStoreScope(), old, newItems);
+  _inMemoryCreditLedger = items;
 };
 
-export const getCreditPayments = (): CreditPayment[] => storage.get(getScopedKey(STORAGE_KEYS.CREDIT_PAYMENTS), []);
+export const getCreditPayments = (): CreditPayment[] => _inMemoryCreditPayments;
 export const setCreditPayments = (items: CreditPayment[]) => {
-  const newItems = applyPendingSync(items, getCreditPayments());
-  storage.set(getScopedKey(STORAGE_KEYS.CREDIT_PAYMENTS), newItems);
+  _inMemoryCreditPayments = items;
 };
 
 

@@ -10,7 +10,9 @@ export type CoreTable =
   | 'credit_ledger'
   | 'customers'
   | 'menu_items'
-  | 'inventory';
+  | 'inventory'
+  | 'expenses'
+  | 'checklists';
 
 export const CORE_TABLES: CoreTable[] = [
   'orders',
@@ -18,6 +20,8 @@ export const CORE_TABLES: CoreTable[] = [
   'customers',
   'menu_items',
   'inventory',
+  'expenses',
+  'checklists',
 ];
 
 // Generic envelope stored in IndexedDB. The full record lives in `data`.

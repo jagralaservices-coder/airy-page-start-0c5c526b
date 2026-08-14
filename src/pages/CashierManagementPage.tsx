@@ -44,7 +44,7 @@ export default function CashierManagementPage() {
   const pos = usePOSSafe();
   const { isOwner, selectedStoreId, selectedStoreName, selectStore } = useOwnerStore();
   const [showStoreSelection, setShowStoreSelection] = useState(false);
-  
+
   const storeId = isOwner ? selectedStoreId || '' : pos?.activeStore?.id || '';
   const storeName = isOwner ? selectedStoreName || '' : pos?.activeStore?.name || '';
   const [list, setList] = useState<CashierRecord[]>([]);
@@ -69,7 +69,7 @@ export default function CashierManagementPage() {
   useEffect(() => {
     if (!storeId) return;
     setMode(isCashierBillingModeOn(storeId));
-    loadCashierBillingMode(storeId).then(setMode).catch(() => {});
+    loadCashierBillingMode(storeId).then(setMode).catch(() => { });
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
@@ -89,8 +89,8 @@ export default function CashierManagementPage() {
             </Button>
           )}
         </div>
-        <AdminStoreSelectionDialog 
-          isOpen={showStoreSelection} 
+        <AdminStoreSelectionDialog
+          isOpen={showStoreSelection}
           onClose={() => setShowStoreSelection(false)}
           onSelectStore={(store) => {
             if (store) {
@@ -223,8 +223,8 @@ export default function CashierManagementPage() {
         cashier={resetting}
         onOpenChange={(o) => { if (!o) setResetting(null); }}
       />
-      <AdminStoreSelectionDialog 
-        isOpen={showStoreSelection} 
+      <AdminStoreSelectionDialog
+        isOpen={showStoreSelection}
         onClose={() => setShowStoreSelection(false)}
         onSelectStore={(store) => {
           if (store) {
@@ -295,11 +295,11 @@ const CashierFormDialog: React.FC<{
           }
           throw e;
         }
-        
+
         // Also create a Supabase Auth user for this Cashier
         const dummyEmail = code.trim().toLowerCase();
         const pinToSend = /^\d+$/.test(pin.trim()) ? pin.trim() + '#MaxoraPOS!26@Auth' : pin.trim();
-        
+
         try {
           await invokeFunctionWithResponseFallback('create-staff', {
             name: name.trim(),
@@ -329,15 +329,15 @@ const CashierFormDialog: React.FC<{
             password: pinToSend,
             options: { data: { full_name: name.trim(), role: 'cashier' } }
           });
-          
+
           if (authData?.user) {
-             const { error: roleErr } = await supabase.from('user_roles').insert({
-               user_id: authData.user.id,
-               role: 'cashier',
-               store_id: storeId,
-               is_active: true
-             });
-             if (roleErr) console.error("Failed to insert user_role in fallback", roleErr);
+            const { error: roleErr } = await supabase.from('user_roles').insert({
+              user_id: authData.user.id,
+              role: 'cashier',
+              store_id: storeId,
+              is_active: true
+            });
+            if (roleErr) console.error("Failed to insert user_role in fallback", roleErr);
           }
           if (signUpError && !signUpError.message.includes('already registered')) {
             throw new Error(`Auth creation failed: ${signUpError.message}`);
@@ -425,7 +425,7 @@ const ResetPinDialog: React.FC<{ open: boolean; cashier: CashierRecord | null; o
               await resetCashierPin(cashier.id, pin);
               const dummyEmail = cashier.cashier_code.toLowerCase();
               const pinToSend = /^\\d+$/.test(pin.trim()) ? pin.trim() + 'Aa@1' : pin.trim();
-              
+
               try {
                 // Try edge function first if it's available and user has permission
                 await invokeFunctionWithResponseFallback('update-staff-password', {
@@ -438,7 +438,7 @@ const ResetPinDialog: React.FC<{ open: boolean; cashier: CashierRecord | null; o
                 // Since this is a fallback, the Cashier's Auth password might not be perfectly in sync if edge function fails.
                 toast.warning('Auth password could not be synced. Cashier might need to be recreated if login fails.', { duration: 6000 });
               }
-              
+
               toast.success('PIN reset successfully');
               onOpenChange(false);
             } catch (e: any) {

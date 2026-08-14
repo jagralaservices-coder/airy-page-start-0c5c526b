@@ -146,10 +146,10 @@ serve(async (req) => {
     console.log('Found auth user:', authUser.id)
 
     // Step 2: Update customer record
-    // Fetch customer details to calculate revenue
+    // Fetch customer details to calculate revenue and create merchant record
     const { data: customerData, error: fetchError } = await supabaseAdmin
       .from('customers')
-      .select('subscription_plan, enabled_addons, business_name')
+      .select('subscription_plan, enabled_addons, business_name, owner_name, phone, business_type')
       .eq('id', customer_id)
       .single()
 
@@ -163,11 +163,13 @@ serve(async (req) => {
     const subscriptionEnd = new Date()
     subscriptionEnd.setDate(subscriptionEnd.getDate() + 30) // 30 days
 
+    // Update customer record with approval status and associate it to the user ID
     const { error: updateError } = await supabaseAdmin
       .from('customers')
       .update({ 
         approval_status: 'approved',
         is_active: true,
+        owner_user_id: authUser.id,
         approved_at: new Date().toISOString(),
         approved_by: user.id,
         subscription_start: new Date().toISOString().split('T')[0],
@@ -183,31 +185,39 @@ serve(async (req) => {
       )
     }
 
-    // Step 3: Create user_role for the owner (check if already exists first)
-    const { data: existingRole } = await supabaseAdmin
-      .from('user_roles')
-      .select('id')
-      .eq('user_id', authUser.id)
-      .eq('role', 'owner')
-      .eq('customer_id', customer_id)
-      .maybeSingle()
+    // Step 2b: Create corresponding merchants record
+    const { error: merchantInsertError } = await supabaseAdmin.from("merchants").insert({
+      id: customer_id, // Same ID as customer
+      owner_user_id: authUser.id,
+      business_name: customerData.business_name,
+      owner_name: customerData.owner_name || authUser.user_metadata?.full_name || owner_email.split('@')[0],
+      owner_email: normalizedEmail,
+      phone: customerData.phone || null,
+      business_type: customerData.business_type || "retail",
+      subscription_plan: customerData.subscription_plan || "basic",
+      subscription_tier: customerData.subscription_plan || "basic",
+      approval_status: "approved",
+      is_active: true,
+    })
 
-    if (!existingRole) {
-      const { error: roleInsertError } = await supabaseAdmin.from('user_roles').insert({
-        user_id: authUser.id,
-        role: 'owner',
-        customer_id: customer_id,
-        is_active: true
-      })
+    if (merchantInsertError) {
+      console.log('Error creating merchant:', merchantInsertError)
+    }
 
-      if (roleInsertError) {
-        console.log('Error creating role:', roleInsertError)
-      }
-    } else {
-      // Ensure existing role is active
-      await supabaseAdmin.from('user_roles')
-        .update({ is_active: true })
-        .eq('id', existingRole.id)
+    // Step 3: Replace any previous/default role rows with the definitive owner role
+    // Delete any default role (e.g. cashier) assigned to this user on signup
+    await supabaseAdmin.from('user_roles').delete().eq('user_id', authUser.id)
+
+    const { error: roleInsertError } = await supabaseAdmin.from('user_roles').insert({
+      user_id: authUser.id,
+      role: 'owner',
+      customer_id: customer_id,
+      merchant_id: customer_id,
+      is_active: true
+    })
+
+    if (roleInsertError) {
+      console.log('Error creating owner role:', roleInsertError)
     }
 
     // Step 4: Also create/update profile if missing

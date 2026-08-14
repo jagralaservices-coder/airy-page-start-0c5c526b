@@ -602,12 +602,26 @@ const AuthPage: React.FC = () => {
     }
     setIsLoading(true);
     try {
-      const { error: signupError } = await signup(email, password, fullName);
+      // Clear any previous session local storage first to ensure separation
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('pos_') || k.startsWith('owner_') || k.startsWith('maxora.'))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      sessionStorage.clear();
+
+      const { error: signupError, data: signupData } = await signup(email, password, fullName, 'owner');
       if (signupError) throw new Error(signupError);
       
       await new Promise(resolve => setTimeout(resolve, 500));
 
+      const userId = signupData?.user?.id;
+
       const { error: customerError } = await supabase.from('customers').insert({
+        owner_user_id: userId,
         owner_email: email,
         owner_name: fullName,
         business_name: businessName,

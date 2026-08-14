@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-interface LocationResult {
+export interface LocationResult {
   success: boolean;
   distance?: number;
   latitude?: number;

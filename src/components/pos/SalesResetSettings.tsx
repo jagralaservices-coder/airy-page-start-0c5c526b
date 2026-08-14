@@ -118,8 +118,6 @@ export const SalesResetSettings: React.FC = () => {
   };
 
   const handleResetNow = () => {
-    localStorage.setItem('pos_orders', '[]');
-    
     const updatedConfig = {
       ...config,
       lastResetTime: new Date().toISOString()

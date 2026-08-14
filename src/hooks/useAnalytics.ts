@@ -4,12 +4,14 @@ import { Order, CartItem } from '@/lib/store';
 import { getPaymentBreakdownSummary, parseOrderPaymentBreakdown } from '@/lib/paymentBreakdown';
 import { supabase } from '@/integrations/supabase/client';
 import { getCreditPayments, getCreditLedger, safeMerge } from '@/lib/store';
-import { startOfDay, startOfWeek, startOfMonth, isAfter } from 'date-fns';
+import { startOfDay, endOfDay, startOfWeek, startOfMonth, isAfter, subDays } from 'date-fns';
+
 import { useOwnerStore } from './useOwnerStore';
 import { useCreditLedgerQuery, useCreditPaymentsQuery } from '@/contexts/POSDataContext';
 import { dbToLocalCreditEntry, dbToLocalCreditPayment } from '@/lib/transformers';
 
-export type TimeRange = 'today' | 'week' | 'month' | 'all' | 'custom';
+export type TimeRange = 'today' | 'yesterday' | 'week' | 'month' | 'all' | 'custom';
+
 export interface CustomDateRange {
   from: Date;
   to?: Date;
@@ -218,6 +220,30 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
     storeId: qr.store_id,
   });
 
+  // Compute DB-level date boundaries based on current time range
+  const dbDateBounds = useMemo(() => {
+    const now = new Date();
+    if (timeRange === 'today') {
+      return { from: startOfDay(now).toISOString(), to: endOfDay(now).toISOString() };
+    }
+    if (timeRange === 'yesterday') {
+      const y = subDays(now, 1);
+      return { from: startOfDay(y).toISOString(), to: endOfDay(y).toISOString() };
+    }
+    if (timeRange === 'week') {
+      return { from: startOfWeek(now).toISOString(), to: null };
+    }
+    if (timeRange === 'month') {
+      return { from: startOfMonth(now).toISOString(), to: null };
+    }
+    if (timeRange === 'custom' && customDateRange?.from) {
+      const from = startOfDay(customDateRange.from).toISOString();
+      const to = customDateRange.to ? endOfDay(customDateRange.to).toISOString() : null;
+      return { from, to };
+    }
+    return { from: null, to: null };
+  }, [timeRange, customDateRange]);
+
   // Fetch orders from DB (including QR orders)
   const fetchOrdersFromDB = useCallback(async () => {
     if (!effectiveStoreId && !isOwner) {
@@ -228,45 +254,96 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
     setIsLoading(true);
     try {
       if (isStoreLogin) {
-        // Use edge function for store login (no auth session)
-        const { data, error } = await supabase.functions.invoke('sync-orders', {
-          body: {
-            action: 'fetch',
-            store_id: effectiveStoreId,
-            store_code: getStoreCodeFromStorage(),
-          }
-        });
+        // Use edge function for store login (no auth session).
+        // If edge function succeeds → use those orders (includes all store orders from DB).
+        // If edge function fails (auth/network) → fall back to direct Supabase query so
+        // cashier-printed bills still appear in reports.
+        let edgeFunctionSucceeded = false;
 
-        if (error || data?.error) {
-          console.error('[useAnalytics] Edge function fetch error:', error || data?.error);
-          setDbOrders(posContext?.orders || []);
-          return;
+        try {
+          const { data, error } = await supabase.functions.invoke('sync-orders', {
+            body: {
+              action: 'fetch',
+              store_id: effectiveStoreId,
+              store_code: getStoreCodeFromStorage(),
+            }
+          });
+
+          if (!error && !data?.error && data?.orders) {
+            edgeFunctionSucceeded = true;
+            const orders = (data.orders || []).map(dbToLocalOrder);
+            const localOrders = posContext?.orders || [];
+            const localOrdersMap = new Map(localOrders.map((o: any) => [o.id, o]));
+            const localOrdersByBill = new Map(
+              localOrders
+                .filter((o: any) => o.billNumber)
+                .map((o: any) => [o.billNumber, o])
+            );
+            orders.forEach((o: any) => {
+              const local = localOrdersMap.get(o.id) || (o.billNumber ? localOrdersByBill.get(o.billNumber) : undefined);
+              if (local && (local as any).paymentBreakdown && !o.paymentBreakdown) {
+                o.paymentBreakdown = (local as any).paymentBreakdown;
+              }
+            });
+            setDbOrders(orders);
+          } else {
+            console.warn('[useAnalytics] Edge function returned error, falling back to direct DB query:', error || data?.error);
+          }
+        } catch (edgeErr) {
+          console.warn('[useAnalytics] Edge function threw, falling back to direct DB query:', edgeErr);
         }
 
-        const orders = (data?.orders || []).map(dbToLocalOrder);
-        const localOrders = posContext?.orders || [];
-        const localOrdersMap = new Map(localOrders.map(o => [o.id, o]));
-        const localOrdersByBill = new Map(
-          localOrders
-            .filter(o => o.billNumber)
-            .map(o => [o.billNumber, o])
-        );
+        // Fallback: direct DB query (same as owner path) when edge function fails
+        if (!edgeFunctionSucceeded && effectiveStoreId) {
+          let ordersQuery = supabase
+            .from('orders')
+            .select('*')
+            .eq('store_id', effectiveStoreId)
+            .order('created_at', { ascending: false })
+            .limit(5000);
+          if (dbDateBounds.from) ordersQuery = ordersQuery.gte('created_at', dbDateBounds.from);
+          if (dbDateBounds.to) ordersQuery = ordersQuery.lte('created_at', dbDateBounds.to);
 
-        orders.forEach(o => {
-          const local = localOrdersMap.get(o.id) || (o.billNumber ? localOrdersByBill.get(o.billNumber) : undefined);
-          if (local && local.paymentBreakdown && !o.paymentBreakdown) {
-            o.paymentBreakdown = local.paymentBreakdown;
+          const { data: directData, error: directError } = await ordersQuery;
+          if (directError) {
+            console.error('[useAnalytics] Direct DB fallback also failed:', directError);
+            setDbOrders(posContext?.orders || []);
+          } else {
+            const fallbackOrders = (directData || []).map(dbToLocalOrder);
+            const localOrders = posContext?.orders || [];
+            const localOrdersMap = new Map(localOrders.map((o: any) => [o.id, o]));
+            fallbackOrders.forEach((o: any) => {
+              const local = localOrdersMap.get(o.id);
+              if (local && (local as any).paymentBreakdown && !o.paymentBreakdown) {
+                o.paymentBreakdown = (local as any).paymentBreakdown;
+              }
+            });
+            // Also merge local-only orders that haven't synced yet
+            const dbIds = new Set(fallbackOrders.map((o: any) => o.id));
+            const localOnly = localOrders.filter((o: any) => !dbIds.has(o.id));
+            setDbOrders([...fallbackOrders, ...localOnly]);
           }
-        });
-        setDbOrders(orders);
+          return;
+        }
       } else {
         // Fetch main orders and completed QR orders in parallel
+        // Apply server-side date filtering when a specific range is selected
         let ordersQuery = supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(5000);
         let qrQuery = supabase.from('qr_orders').select('*').in('status', ['completed', 'ready', 'accepted', 'preparing']).order('created_at', { ascending: false }).limit(5000);
         
         if (effectiveStoreId) {
           ordersQuery = ordersQuery.eq('store_id', effectiveStoreId);
           qrQuery = qrQuery.eq('store_id', effectiveStoreId);
+        }
+
+        // Apply date filters server-side for targeted queries
+        if (dbDateBounds.from) {
+          ordersQuery = ordersQuery.gte('created_at', dbDateBounds.from);
+          qrQuery = qrQuery.gte('created_at', dbDateBounds.from);
+        }
+        if (dbDateBounds.to) {
+          ordersQuery = ordersQuery.lte('created_at', dbDateBounds.to);
+          qrQuery = qrQuery.lte('created_at', dbDateBounds.to);
         }
 
         const [ordersRes, qrRes] = await Promise.all([
@@ -312,15 +389,16 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveStoreId, isStoreLogin]);
+  }, [effectiveStoreId, isStoreLogin, dbDateBounds]);
 
-  // Fetch on mount and when store changes
+  // Fetch on mount, when store changes, or when date range changes
   useEffect(() => {
     fetchOrdersFromDB();
 
     // Refresh every 60 seconds as fallback
     const interval = setInterval(fetchOrdersFromDB, 60000);
     return () => clearInterval(interval);
+
   }, [fetchOrdersFromDB]);
 
   // Supabase Realtime subscription for instant cross-device sync
@@ -377,11 +455,74 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
 
     const now = new Date();
     let startDate: Date;
+    let endDate: Date | null = null;
 
     switch (timeRange) {
-      case 'today':
-        startDate = startOfDay(now);
+      case 'today': {
+        // Read business reset time (default 06:00)
+        let businessResetStr = '06:00';
+        try {
+          const paySettingsStr = localStorage.getItem('pos_payment_settings');
+          if (paySettingsStr) {
+            const parsed = JSON.parse(paySettingsStr);
+            if (parsed.businessDateResetTime) {
+              businessResetStr = parsed.businessDateResetTime;
+            }
+          }
+        } catch {}
+
+        const [hours, minutes] = businessResetStr.split(':').map(Number);
+        const businessDayStart = new Date(now);
+        businessDayStart.setHours(hours, minutes, 0, 0);
+        if (now < businessDayStart) {
+          businessDayStart.setDate(businessDayStart.getDate() - 1);
+        }
+
+        // Also check if manual sales reset has occurred
+        let finalStart = businessDayStart;
+        try {
+          const resetConfigStr = localStorage.getItem('pos_sales_reset_config');
+          if (resetConfigStr) {
+            const parsed = JSON.parse(resetConfigStr);
+            if (parsed.enabled !== false && parsed.lastResetTime) {
+              const lastResetDate = new Date(parsed.lastResetTime);
+              if (lastResetDate > finalStart && lastResetDate <= now) {
+                finalStart = lastResetDate;
+              }
+            }
+          }
+        } catch {}
+
+        startDate = finalStart;
+        endDate = null; // show everything from start of shift onwards
         break;
+      }
+      case 'yesterday': {
+        let businessResetStr = '06:00';
+        try {
+          const paySettingsStr = localStorage.getItem('pos_payment_settings');
+          if (paySettingsStr) {
+            const parsed = JSON.parse(paySettingsStr);
+            if (parsed.businessDateResetTime) {
+              businessResetStr = parsed.businessDateResetTime;
+            }
+          }
+        } catch {}
+
+        const [hours, minutes] = businessResetStr.split(':').map(Number);
+        const businessDayStart = new Date(now);
+        businessDayStart.setHours(hours, minutes, 0, 0);
+        if (now < businessDayStart) {
+          businessDayStart.setDate(businessDayStart.getDate() - 1);
+        }
+
+        const yesterdayStart = new Date(businessDayStart);
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        
+        startDate = yesterdayStart;
+        endDate = businessDayStart;
+        break;
+      }
       case 'week':
         startDate = startOfWeek(now);
         break;
@@ -393,11 +534,11 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
           startDate = startOfDay(customDateRange.from);
           // If 'to' is provided, we filter between 'from' and 'to'
           if (customDateRange.to) {
-            const endDate = new Date(customDateRange.to);
-            endDate.setHours(23, 59, 59, 999);
+            const ed = new Date(customDateRange.to);
+            ed.setHours(23, 59, 59, 999);
             return filtered.filter(order => {
               const orderDate = new Date(order.createdAt);
-              return isAfter(orderDate, startDate) && orderDate <= endDate;
+              return orderDate >= startDate && orderDate <= ed;
             });
           }
         } else {
@@ -408,10 +549,12 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
         startDate = startOfDay(now);
     }
 
-    return filtered.filter(order =>
-      isAfter(new Date(order.createdAt), startDate)
-    );
+    return filtered.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= startDate && (endDate === null || orderDate <= endDate);
+    });
   }, [orders, timeRange, customDateRange]);
+
 
   // All orders for status counts (not just billed)
   const allActiveOrders = useMemo(() => {
@@ -429,11 +572,19 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
 
     const now = new Date();
     let startDate: Date;
+    let endDate: Date | null = null;
 
     switch (timeRange) {
       case 'today':
         startDate = startOfDay(now);
+        endDate = endOfDay(now);
         break;
+      case 'yesterday': {
+        const yesterday = subDays(now, 1);
+        startDate = startOfDay(yesterday);
+        endDate = endOfDay(yesterday);
+        break;
+      }
       case 'week':
         startDate = startOfWeek(now);
         break;
@@ -445,11 +596,11 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
           startDate = startOfDay(customDateRange.from);
           // If 'to' is provided, we filter between 'from' and 'to'
           if (customDateRange.to) {
-            const endDate = new Date(customDateRange.to);
-            endDate.setHours(23, 59, 59, 999);
+            const ed = new Date(customDateRange.to);
+            ed.setHours(23, 59, 59, 999);
             return filtered.filter(order => {
               const orderDate = new Date(order.createdAt);
-              return isAfter(orderDate, startDate) && orderDate <= endDate;
+              return orderDate >= startDate && orderDate <= ed;
             });
           }
         } else {
@@ -460,10 +611,12 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
         startDate = startOfDay(now);
     }
 
-    return filtered.filter(order =>
-      isAfter(new Date(order.createdAt), startDate)
-    );
+    return filtered.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= startDate && (endDate === null || orderDate <= endDate);
+    });
   }, [orders, timeRange, customDateRange]);
+
 
   // Core Summary
   const summary: AnalyticsSummary = useMemo(() => {
@@ -679,7 +832,8 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
         const now = new Date();
         let startDate: Date | null = null;
         let endDate: Date | null = null;
-        if (timeRange === 'today') startDate = startOfDay(now);
+        if (timeRange === 'today') { startDate = startOfDay(now); endDate = endOfDay(now); }
+        else if (timeRange === 'yesterday') { const y = subDays(now, 1); startDate = startOfDay(y); endDate = endOfDay(y); }
         else if (timeRange === 'week') startDate = startOfWeek(now);
         else if (timeRange === 'month') startDate = startOfMonth(now);
         else if (timeRange === 'custom' && customDateRange?.from) {
@@ -689,6 +843,7 @@ export const useAnalytics = (timeRange: TimeRange = 'today', customDateRange?: C
             endDate.setHours(23, 59, 59, 999);
           }
         }
+
 
         const allPayments = cloudCreditPayments || getCreditPayments();
         const storePayments = allPayments.filter(p => !effectiveStoreId || p.store_id === effectiveStoreId);

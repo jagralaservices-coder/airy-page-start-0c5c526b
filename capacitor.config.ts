@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.ezymydocs.paystorepos',
-  appName: 'PayStore POS',
+  appId: 'com.ezymydocs.maxora',
+  appName: 'Maxora',
   webDir: 'dist',
   android: {
     allowMixedContent: true,

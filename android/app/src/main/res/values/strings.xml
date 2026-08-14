@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">PayStore POS</string>
-    <string name="title_activity_main">PayStore POS</string>
-    <string name="package_name">com.ezymydocs.paystorepos</string>
-    <string name="custom_url_scheme">com.ezymydocs.paystorepos</string>
+    <string name="app_name">Maxora</string>
+    <string name="title_activity_main">Maxora</string>
+    <string name="package_name">com.ezymydocs.maxora</string>
+    <string name="custom_url_scheme">com.ezymydocs.maxora</string>
 </resources>

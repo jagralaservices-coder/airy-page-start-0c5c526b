@@ -141,6 +141,12 @@ export const AppSidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       hideForStoreLogin: true
     },
     { 
+      path: '/operations/checklists', 
+      icon: Check, 
+      label: 'Checklist',
+      allowedRoles: ['admin', 'owner', 'store_manager', 'staff']
+    },
+    { 
       path: '/reports', 
       icon: BarChart3, 
       label: 'Reports',

@@ -288,39 +288,44 @@ export const AppHeader: React.FC = () => {
         {/* Divider */}
         <div className="w-px h-8 bg-border mx-1 flex-shrink-0" />
 
-        {/* New Order */}
-        {userRole?.role !== 'admin' && userRole?.role !== 'super_admin' && userRole?.role !== 'owner' && (
-          <Button
-            onClick={handleNewOrder}
-            size="sm"
-            className="h-9 gap-1.5 flex-shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Order</span>
-          </Button>
+        {/* Header Action Buttons (Hidden for Staff users) */}
+        {!['staff', 'cashier'].includes(String(userRole?.role || '').toLowerCase()) && !Boolean(sessionStorage.getItem('active_staff')) && (
+          <>
+            {/* New Order */}
+            {userRole?.role !== 'admin' && userRole?.role !== 'super_admin' && userRole?.role !== 'owner' && (
+              <Button
+                onClick={handleNewOrder}
+                size="sm"
+                className="h-9 gap-1.5 flex-shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">New Order</span>
+              </Button>
+            )}
+
+            {/* Search Bill - Now navigates to full page */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/search-bill')}
+              className="h-9 gap-1.5 flex-shrink-0 bg-slate-400 border-none text-white hover:bg-slate-500 hover:text-white"
+            >
+              <Search className="w-4 h-4" />
+              <span className="hidden md:inline">Search Bill</span>
+            </Button>
+
+            {/* Search KOT */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/search-bill?type=kot')}
+              className="h-9 gap-1.5 flex-shrink-0 bg-slate-400 border-none text-white hover:bg-slate-500 hover:text-white"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden md:inline">Search KOT</span>
+            </Button>
+          </>
         )}
-
-        {/* Search Bill - Now navigates to full page */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate('/search-bill')}
-          className="h-9 gap-1.5 flex-shrink-0 bg-slate-400 border-none text-white hover:bg-slate-500 hover:text-white"
-        >
-          <Search className="w-4 h-4" />
-          <span className="hidden md:inline">Search Bill</span>
-        </Button>
-
-        {/* Search KOT */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate('/search-bill?type=kot')}
-          className="h-9 gap-1.5 flex-shrink-0 bg-slate-400 border-none text-white hover:bg-slate-500 hover:text-white"
-        >
-          <FileText className="w-4 h-4" />
-          <span className="hidden md:inline">Search KOT</span>
-        </Button>
 
         {/* Active Store Display - When logged in via store login */}
         {isStoreLogin && activeStore && (

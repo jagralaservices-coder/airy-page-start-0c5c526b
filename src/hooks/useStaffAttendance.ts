@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useLocationVerification } from './useLocationVerification';
+import { useLocationVerification, LocationResult } from './useLocationVerification';
 import { toast } from '@/hooks/use-toast';
 
 interface AttendanceRecord {
@@ -52,6 +52,8 @@ interface UseStaffAttendanceResult {
   refreshAttendance: () => Promise<void>;
   loadTodayAttendance: () => Promise<StaffAttendanceState>;
   applyAttendanceRecord: (record: AttendanceRecordInput | null) => StaffAttendanceState;
+  verifyLocation: () => Promise<LocationResult>;
+  maxDistance: number;
 }
 
 interface ResolvedStaffContext {
@@ -605,5 +607,7 @@ export const useStaffAttendance = (
     refreshAttendance: fetchAttendance,
     loadTodayAttendance,
     applyAttendanceRecord,
+    verifyLocation,
+    maxDistance,
   };
 };

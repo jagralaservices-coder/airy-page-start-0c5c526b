@@ -1,4 +1,4 @@
-package com.ezymydocs.paystorepos;
+package com.ezymydocs.maxora;
 
 import com.getcapacitor.BridgeActivity;
 

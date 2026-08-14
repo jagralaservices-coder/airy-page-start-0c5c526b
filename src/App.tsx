@@ -117,7 +117,7 @@ const ProductionReportPage = lazy(() => import("./pages/reports/ProductionReport
 const PurchaseRegisterPage = lazy(() => import("./pages/reports/PurchaseRegisterPage"));
 const PurchaseReportPage = lazy(() => import("./pages/reports/PurchaseReportPage"));
 // Phase 2 Inventory & Purchase Reports
-const OpeningStockPage = lazy(() => import("./pages/reports/OpeningStockPage"));
+const OpeningClosingAuditPage = lazy(() => import("./pages/reports/OpeningClosingAuditPage"));
 const ClosingStockPage = lazy(() => import("./pages/reports/ClosingStockPage"));
 const StockAgingPage = lazy(() => import("./pages/reports/StockAgingPage"));
 const DeadStockPage = lazy(() => import("./pages/reports/DeadStockPage"));
@@ -138,6 +138,13 @@ const PurchaseOrdersPage = lazy(() => import("./pages/PurchaseOrdersPage"));
 const WorkforceAnalyticsPage = lazy(() => import("./pages/WorkforceAnalyticsPage"));
 const AIControlCenterPage = lazy(() => import("./pages/AIControlCenterPage"));
 const SmartInventoryPage = lazy(() => import("./pages/SmartInventoryPage"));
+
+// Checklist Pages
+const ChecklistDashboardPage = lazy(() => import("./pages/checklists/ChecklistDashboardPage"));
+const ChecklistCreatePage = lazy(() => import("./pages/checklists/ChecklistCreatePage"));
+const ChecklistDetailPage = lazy(() => import("./pages/checklists/ChecklistDetailPage"));
+const StaffChecklistExecutionPage = lazy(() => import("./pages/checklists/StaffChecklistExecutionPage"));
+
 const DynamicPricingPage = lazy(() => import("./pages/DynamicPricingPage"));
 const ExecutiveDashboardPage = lazy(() => import("./pages/ExecutiveDashboardPage"));
 const APIManagementPage = lazy(() => import("./pages/APIManagementPage"));
@@ -367,10 +374,10 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         case 'merchant':
           return <Navigate to="/dashboard" replace />;
         case 'store_manager':
+          return <Navigate to="/dashboard" replace />;
         case 'cashier':
-          return <Navigate to="/pos" replace />;
         case 'staff':
-          return <Navigate to="/staff-dashboard" replace />;
+          return <Navigate to="/operations/checklists" replace />;
       }
     }
     // If authenticated but no role yet, still show the page (they need to contact admin)
@@ -459,11 +466,22 @@ const AppRoutes = () => {
       <Route path="/staff-notifications" element={
         <ProtectedRoute allowStaffLogin><StaffNotificationsPage /></ProtectedRoute>
       } />
+      <Route path="/staff/checklist/:id" element={
+        <ProtectedRoute allowStaffLogin><StaffChecklistExecutionPage /></ProtectedRoute>
+      } />
       
       {/* Protected Routes - Owner & Store Manager */}
       <Route path="/dashboard" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><DashboardPage /></ProtectedRoute>
       } />
+      
+      {/* Checklist Routes */}
+      <Route path="/checklist" element={<Navigate to="/operations/checklists" replace />} />
+      <Route path="/checklists" element={<Navigate to="/operations/checklists" replace />} />
+      <Route path="/operations/checklists" element={<ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager', 'staff']} allowStoreLogin allowStaffLogin><ChecklistDashboardPage /></ProtectedRoute>} />
+      <Route path="/operations/checklists/create" element={<ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><ChecklistCreatePage /></ProtectedRoute>} />
+      <Route path="/operations/checklists/:id" element={<ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager', 'staff']} allowStoreLogin allowStaffLogin><ChecklistDetailPage /></ProtectedRoute>} />
+      <Route path="/operations/checklists/execute/:id" element={<ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager', 'staff']} allowStoreLogin allowStaffLogin><StaffChecklistExecutionPage /></ProtectedRoute>} />
       <Route path="/pos" element={<ProtectedRoute allowedRoles={['store_manager', 'cashier']} allowStoreLogin={true} allowStaffLogin={true}><CashierBillingPage /></ProtectedRoute>} />
       <Route path="/cashiers" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'merchant', 'store_manager']} allowStoreLogin><CashierManagementPage /></ProtectedRoute>
@@ -489,6 +507,7 @@ const AppRoutes = () => {
       <Route path="/reports/payment-methods" element={
         <ProtectedRoute allowedRoles={['cashier', 'store_manager', 'owner', 'admin', 'super_admin']} allowStoreLogin><PaymentMethodsPage /></ProtectedRoute>
       } />
+      <Route path="/reports/cashier" element={<Navigate to="/reports/more?r=cashier" replace />} />
       <Route path="/reports/more" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><MoreReportsPage /></ProtectedRoute>
       } />
@@ -558,12 +577,11 @@ const AppRoutes = () => {
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><PurchaseReportPage /></ProtectedRoute>
       } />
       {/* Phase 2 – Inventory & Purchase Reports */}
-      <Route path="/reports/opening-stock" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><OpeningStockPage /></ProtectedRoute>
+      <Route path="/reports/opening-closing" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><OpeningClosingAuditPage /></ProtectedRoute>
       } />
-      <Route path="/reports/closing-stock" element={
-        <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><ClosingStockPage /></ProtectedRoute>
-      } />
+      <Route path="/reports/opening-stock" element={<Navigate to="/reports/opening-closing?t=opening" replace />} />
+      <Route path="/reports/closing-stock" element={<Navigate to="/reports/opening-closing?t=closing" replace />} />
       <Route path="/reports/stock-aging" element={
         <ProtectedRoute allowedRoles={['super_admin', 'admin', 'owner', 'store_manager']} allowStoreLogin><StockAgingPage /></ProtectedRoute>
       } />
@@ -811,8 +829,6 @@ const AppRoutes = () => {
   );
 };
 
-import { syncEngine } from '@/lib/syncEngine';
-
 const App = () => {
   const [permissionsComplete, setPermissionsComplete] = useState(() => {
     try {
@@ -821,11 +837,6 @@ const App = () => {
       return true;
     }
   });
-
-  useEffect(() => {
-    syncEngine.start();
-    return () => syncEngine.stop();
-  }, []);
 
   // Show permission request screen on first launch (native only)
   if (!permissionsComplete) {

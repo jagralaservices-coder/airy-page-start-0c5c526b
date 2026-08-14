@@ -3,7 +3,7 @@
 
 import { DateRange } from 'react-day-picker';
 import { getInventoryHistory, InventoryHistoryEntry } from '@/lib/inventoryHistory';
-import { getInventory, getMenuItems, InventoryItem, MenuItem, Order } from '@/lib/store';
+import { getInventory, getMenuItems, InventoryItem, MenuItem, Order, storage } from '@/lib/store';
 
 export const fmt = (v: number, digits = 2) =>
   Number.isFinite(v) ? v.toLocaleString('en-IN', { minimumFractionDigits: digits, maximumFractionDigits: digits }) : '0';
@@ -27,41 +27,55 @@ export const daysBetween = (a: Date, b: Date) =>
 // (e.g. owner viewing "All Stores"). Falls back to normal per-store read otherwise.
 export const readInventoryHistory = (storeId?: string): InventoryHistoryEntry[] => {
   if (storeId) return getInventoryHistory({ storeId });
-  const perStore = getInventoryHistory();
-  if (perStore.length > 0) return perStore;
-  // Aggregate: scan localStorage for any pos_inventory_history_* keys.
-  const all: InventoryHistoryEntry[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith('pos_inventory_history_')) continue;
-      try {
-        const rows = JSON.parse(localStorage.getItem(k) || '[]');
-        if (Array.isArray(rows)) all.push(...rows);
-      } catch {}
-    }
-  } catch {}
-  return all;
+  
+  // Aggregate: get stores that the user has access to, and read their history
+  const stores = storage.get('pos_stores', []);
+  if (Array.isArray(stores) && stores.length > 0) {
+    const all: InventoryHistoryEntry[] = [];
+    stores.forEach((s: any) => {
+      if (s?.id) {
+        const rows = storage.get(`pos_inventory_history_${s.id}`, []);
+        if (Array.isArray(rows)) {
+          all.push(...rows);
+        }
+      }
+    });
+    return all;
+  }
+
+  return getInventoryHistory();
 };
 
 // Aggregate inventory items across all store-scoped keys when the current
 // scope has none — prevents empty reports for owners on "All Stores".
-export const readInventory = (): InventoryItem[] => {
+export const readInventory = (storeId?: string): InventoryItem[] => {
+  if (storeId) {
+    return storage.get(`pos_inventory_${storeId}`, []);
+  }
+
   const primary = getInventory();
   if (primary.length > 0) return primary;
-  const merged = new Map<string, InventoryItem>();
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith('pos_inventory_')) continue;
-      if (k.startsWith('pos_inventory_history_')) continue;
-      try {
-        const rows = JSON.parse(localStorage.getItem(k) || '[]');
-        if (Array.isArray(rows)) rows.forEach((r: InventoryItem) => { if (r?.id && !merged.has(r.id)) merged.set(r.id, r); });
-      } catch {}
-    }
-  } catch {}
-  return Array.from(merged.values());
+
+  // Aggregate: get stores that the user has access to, and read their inventories
+  const stores = storage.get('pos_stores', []);
+  if (Array.isArray(stores) && stores.length > 0) {
+    const merged = new Map<string, InventoryItem>();
+    stores.forEach((s: any) => {
+      if (s?.id) {
+        const rows = storage.get(`pos_inventory_${s.id}`, []);
+        if (Array.isArray(rows)) {
+          rows.forEach((r: InventoryItem) => {
+            if (r?.id && !merged.has(r.id)) {
+              merged.set(r.id, r);
+            }
+          });
+        }
+      }
+    });
+    return Array.from(merged.values());
+  }
+
+  return [];
 };
 
 export const readMenu = (): MenuItem[] => getMenuItems();

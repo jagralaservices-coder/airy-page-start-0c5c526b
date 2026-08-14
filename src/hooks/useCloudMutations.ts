@@ -2,7 +2,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getCurrentStoreId, getCurrentStoreCode } from '@/lib/storeIdentity';
 import { Order, MenuItem, InventoryItem } from '@/lib/store';
-import { toUUID } from './useOrderSync'; // Assuming we keep toUUID or move it to a util file
 
 // Generic edge function call for mutations
 export const mutateCloudData = async (action: 'save' | 'delete' | 'update', dataType: string, payload: any) => {
@@ -66,12 +65,29 @@ export const useSaveOrderMutation = () => {
           : (order.paymentDetails || order.payment_details || null),
       }));
 
-      const { data, error } = await supabase.functions.invoke('sync-orders', {
-        body: { action: 'save', store_id: activeStoreId, store_code: storeCode, orders: functionOrders }
-      });
+      try {
+        const { data, error } = await supabase.functions.invoke('sync-orders', {
+          body: { action: 'save', store_id: activeStoreId, store_code: storeCode, orders: functionOrders }
+        });
 
-      if (error) throw error;
-      return data;
+        if (error) {
+          // Log the error but do not re-throw — let POSContext handle gracefully
+          console.error('[useSaveOrderMutation] Edge function HTTP error:', error.message, (error as any)?.context?.status);
+          return { cloud_error: true, message: error.message, skipped: false };
+        }
+
+        if (data && data.success === false) {
+          // Edge function returned a logical error (e.g. schema mismatch, DB error)
+          console.error('[useSaveOrderMutation] Edge function returned error:', data.error, data.message);
+          return { cloud_error: true, message: data.error || data.message, skipped: false };
+        }
+
+        return data;
+      } catch (err: any) {
+        // Network / invocation error — do not crash the sale
+        console.error('[useSaveOrderMutation] Unexpected error invoking sync-orders:', err?.message || err);
+        return { cloud_error: true, message: err?.message || 'Network error', skipped: false };
+      }
     },
     onSuccess: () => {
       // Legacy cloudData cache

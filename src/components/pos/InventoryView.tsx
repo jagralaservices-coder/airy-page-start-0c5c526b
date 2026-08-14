@@ -54,6 +54,7 @@ import {
 import { InventoryComponentsDialog } from './InventoryComponentsDialog';
 import { BulkInventoryUpload } from './BulkInventoryUpload';
 import { useSubscription } from '@/hooks/useSubscription';
+import { OpeningClosingAuditPage } from '@/pages/reports/OpeningClosingAuditPage';
 
 import { useSaveCloudDataMutation, useDeleteCloudDataMutation } from '@/hooks/useCloudMutations';
 import { useInventoryQuery, useInventoryTransactionsQuery, useMenuItemsQuery } from '@/contexts/POSDataContext';
@@ -1624,46 +1625,7 @@ const CurrentStockView: React.FC<{ onBack: () => void; inventory: InventoryItem[
 };
 
 const OpeningClosingView: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="sticky top-0 z-10 bg-background border-b border-border">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-foreground">Opening - Closing Report</h1>
-          </div>
-          <Button variant="outline" onClick={onBack}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-        </div>
-      </div>
-      <div className="max-w-5xl mx-auto p-4 md:p-6">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Search..." className="pl-10 w-48" />
-            </div>
-            <Button variant="outline" className="gap-2">
-              Configure Column
-              <ChevronDown className="w-4 h-4" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" className="gap-2">
-              <Printer className="w-4 h-4" />
-              Print
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              Export Excel
-            </Button>
-          </div>
-        </div>
-        <EmptyState message="There is no record available." />
-      </div>
-    </div>
-  );
+  return <OpeningClosingAuditPage onBack={onBack} />;
 };
 
 const IndentManagementView: React.FC<{ onBack: () => void; inventory: InventoryItem[] }> = ({ onBack, inventory }) => {

@@ -82,3 +82,7 @@ verify_jwt = false
 [functions.payment-hub-refund]
 verify_jwt = false
 
+[functions.verify-checklist-item]
+verify_jwt = false
+
+

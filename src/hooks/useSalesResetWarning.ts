@@ -146,7 +146,6 @@ export const useSalesResetWarning = () => {
   }, [config, formatTime12Hour, getResetTime, saveSetting]);
 
   const handleResetNow = useCallback(() => {
-    localStorage.setItem('pos_orders', '[]');
     const updatedConfig = { ...config, lastResetTime: new Date().toISOString() };
     saveSetting('pos_sales_reset_config', updatedConfig);
     setConfig(updatedConfig);

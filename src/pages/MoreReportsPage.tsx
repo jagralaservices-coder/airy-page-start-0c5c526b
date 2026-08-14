@@ -1,22 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DateRange } from 'react-day-picker';
-import { ArrowLeft, Download, Printer, FileText } from 'lucide-react';
+import { ArrowLeft, Download, Printer, FileText, UserCheck, Percent, XCircle, DollarSign, Wallet, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { Badge } from '@/components/ui/badge';
 import { usePOS } from '@/contexts/POSContext';
 import { getCustomers, getInventory, Order } from '@/lib/store';
 import { downloadCSV, fmtINR } from '@/lib/reportCsvUtils';
 import { printReport } from '@/lib/reportPrintUtils';
 
 type ReportKey =
-  | 'item' | 'tax' | 'payment' | 'staff'
+  | 'item' | 'tax' | 'payment' | 'staff' | 'cashier'
   | 'customer' | 'hourly' | 'discount' | 'inventory';
 
 const REPORTS: { key: ReportKey; label: string }[] = [
+  { key: 'cashier', label: '🧑‍💻 Cashier Audit & Sales' },
   { key: 'item', label: 'Item-wise Sales' },
   { key: 'tax', label: 'Tax & GST' },
   { key: 'payment', label: 'Payment Mode' },
@@ -27,7 +29,7 @@ const REPORTS: { key: ReportKey; label: string }[] = [
   { key: 'inventory', label: 'Inventory / Stock' },
 ];
 
-const MoreReportsPage: React.FC = () => {
+export const MoreReportsPage: React.FC = () => {
   const navigate = useNavigate();
   const { orders } = usePOS();
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
@@ -37,7 +39,7 @@ const MoreReportsPage: React.FC = () => {
   });
   const initialKey = ((): ReportKey => {
     const k = new URLSearchParams(window.location.search).get('r') as ReportKey | null;
-    return k && REPORTS.some(r => r.key === k) ? k : 'item';
+    return k && REPORTS.some(r => r.key === k) ? k : 'cashier';
   })();
   const [active, setActive] = useState<ReportKey>(initialKey);
 
@@ -57,6 +59,86 @@ const MoreReportsPage: React.FC = () => {
   const dateLabel = dateRange?.from
     ? `${dateRange.from.toLocaleDateString('en-IN')} - ${(dateRange.to || dateRange.from).toLocaleDateString('en-IN')}`
     : 'All Time';
+
+  // ===== Cashier Detailed Audit =====
+  const cashierRows = useMemo(() => {
+    const m = new Map<string, {
+      cashierName: string;
+      totalOrders: number;
+      totalSales: number;
+      totalDiscount: number;
+      cancelledOrders: number;
+      cancelledAmount: number;
+      cashSales: number;
+      upiSales: number;
+      cardSales: number;
+      creditSales: number;
+    }>();
+
+    completed.forEach((o) => {
+      const name = (o as any).createdBy || (o as any).cashierName || (o as any).staffName || 'Counter Cashier';
+      const cur = m.get(name) || {
+        cashierName: name,
+        totalOrders: 0,
+        totalSales: 0,
+        totalDiscount: 0,
+        cancelledOrders: 0,
+        cancelledAmount: 0,
+        cashSales: 0,
+        upiSales: 0,
+        cardSales: 0,
+        creditSales: 0,
+      };
+
+      cur.totalOrders += 1;
+      cur.totalSales += o.total;
+      cur.totalDiscount += (o.discount || 0);
+
+      if (o.paymentMethod === 'part' && o.paymentBreakdown) {
+        cur.cashSales += Number(o.paymentBreakdown.cash) || 0;
+        cur.upiSales += Number(o.paymentBreakdown.upi) || 0;
+        cur.cardSales += Number(o.paymentBreakdown.card) || 0;
+        cur.creditSales += Number(o.paymentBreakdown.credit) || Number(o.paymentBreakdown.udhar) || 0;
+      } else {
+        const pm = (o.paymentMethod || 'cash').toLowerCase();
+        if (pm.includes('cash')) cur.cashSales += o.total;
+        else if (pm.includes('upi') || pm.includes('qr') || pm.includes('online')) cur.upiSales += o.total;
+        else if (pm.includes('card')) cur.cardSales += o.total;
+        else if (pm.includes('credit') || pm.includes('udhar')) cur.creditSales += o.total;
+        else cur.cashSales += o.total;
+      }
+
+      m.set(name, cur);
+    });
+
+    cancelled.forEach((o) => {
+      const name = (o as any).createdBy || (o as any).cashierName || (o as any).staffName || 'Counter Cashier';
+      const cur = m.get(name) || {
+        cashierName: name,
+        totalOrders: 0,
+        totalSales: 0,
+        totalDiscount: 0,
+        cancelledOrders: 0,
+        cancelledAmount: 0,
+        cashSales: 0,
+        upiSales: 0,
+        cardSales: 0,
+        creditSales: 0,
+      };
+
+      cur.cancelledOrders += 1;
+      cur.cancelledAmount += o.total;
+      m.set(name, cur);
+    });
+
+    return Array.from(m.values()).sort((a, b) => b.totalSales - a.totalSales);
+  }, [completed, cancelled]);
+
+  // Overall Cashier Metrics
+  const totalCashierSales = cashierRows.reduce((sum, c) => sum + c.totalSales, 0);
+  const totalCashierDiscount = cashierRows.reduce((sum, c) => sum + c.totalDiscount, 0);
+  const totalCashierCancelledCount = cashierRows.reduce((sum, c) => sum + c.cancelledOrders, 0);
+  const totalCashierCancelledAmount = cashierRows.reduce((sum, c) => sum + c.cancelledAmount, 0);
 
   // ===== Item-wise =====
   const itemRows = useMemo(() => {
@@ -183,6 +265,21 @@ const MoreReportsPage: React.FC = () => {
     let rows: (string | number)[][] = [];
 
     switch (active) {
+      case 'cashier':
+        headers = ['Cashier Name', 'Total Orders', 'Net Sales', 'Discount Allowed', 'Cancelled Count', 'Cancelled Amount', 'Cash Coll.', 'UPI Coll.', 'Card Coll.', 'Udhar Coll.'];
+        rows = cashierRows.map(r => [
+          r.cashierName,
+          r.totalOrders,
+          r.totalSales.toFixed(2),
+          r.totalDiscount.toFixed(2),
+          r.cancelledOrders,
+          r.cancelledAmount.toFixed(2),
+          r.cashSales.toFixed(2),
+          r.upiSales.toFixed(2),
+          r.cardSales.toFixed(2),
+          r.creditSales.toFixed(2),
+        ]);
+        break;
       case 'item':
         headers = ['Item', 'Category', 'Qty Sold', 'Revenue'];
         rows = itemRows.map(r => [r.name, r.category, r.qty, r.revenue.toFixed(2)]);
@@ -204,7 +301,7 @@ const MoreReportsPage: React.FC = () => {
         break;
       case 'staff':
         headers = ['Staff', 'Bills', 'Revenue', 'Avg Bill'];
-        rows = staffRows.map(r => [r.name, r.bills, r.revenue.toFixed(2), (r.revenue / r.bills).toFixed(2)]);
+        rows = staffRows.map(r => [r.name, r.bills, r.revenue.toFixed(2), (r.revenue / (r.bills || 1)).toFixed(2)]);
         break;
       case 'customer':
         headers = ['Customer', 'Phone', 'Orders', 'Total Spent'];
@@ -218,35 +315,36 @@ const MoreReportsPage: React.FC = () => {
         headers = ['Metric', 'Value'];
         rows = [
           ['Total Discount Given', discountRows.totalDiscount.toFixed(2)],
-          ['Bills with Discount', discountRows.discountedBills],
+          ['Discounted Bills', discountRows.discountedBills],
           ['Cancelled Bills', discountRows.cancelledCount],
           ['Cancelled Amount', discountRows.cancelledTotal.toFixed(2)],
         ];
         break;
       case 'inventory':
-        headers = ['Item', 'Qty', 'Unit', 'Min Stock', 'Cost/Unit', 'Stock Value', 'Status'];
-        rows = inventoryRows.map(r => [r.name, r.qty, r.unit, r.min, r.cost.toFixed(2), r.value.toFixed(2), r.low ? 'LOW' : 'OK']);
+        headers = ['Item', 'Qty', 'Unit', 'Min', 'Cost', 'Stock Value', 'Status'];
+        rows = inventoryRows.map(r => [r.name, r.qty, r.unit, r.min, r.cost, r.value.toFixed(2), r.low ? 'LOW' : 'OK']);
         break;
     }
 
     if (mode === 'csv') {
-      downloadCSV(`${title.replace(/\s+/g,'_')}_${Date.now()}`, headers, rows);
+      downloadCSV(`${title}_${Date.now()}.csv`, headers, rows);
     } else {
-      printReport(
-        { title, dateRange: dateLabel, generatedAt: new Date() },
-        [{ type: 'table', data: { headers, rows } }]
-      );
+      printReport(title, dateLabel, headers, rows);
     }
   };
 
   return (
-    <div className="container max-w-7xl mx-auto p-4 space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-            <ArrowLeft className="w-5 h-5" />
+    <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto pb-24">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="icon" onClick={() => navigate('/reports')}>
+            <ArrowLeft className="w-4 h-4" />
           </Button>
-          <h1 className="text-2xl font-bold">More Reports</h1>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Operational Audit Reports</h1>
+            <p className="text-xs text-muted-foreground">Comprehensive Cashier Sales, Discounts, Order Cancellations & Performance Analytics</p>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DatePickerWithRange date={dateRange} setDate={setDateRange} />
@@ -256,24 +354,183 @@ const MoreReportsPage: React.FC = () => {
           <Button variant="outline" size="sm" onClick={() => exportCurrent('print')}>
             <Printer className="w-4 h-4 mr-1" /> Print
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportCurrent('print')}>
-            <FileText className="w-4 h-4 mr-1" /> PDF
-          </Button>
         </div>
       </div>
 
       <Tabs value={active} onValueChange={(v) => setActive(v as ReportKey)}>
-        <TabsList className="flex flex-wrap h-auto justify-start">
+        <TabsList className="flex flex-wrap h-auto justify-start gap-1 p-1">
           {REPORTS.map(r => (
             <TabsTrigger key={r.key} value={r.key} className="text-xs sm:text-sm">{r.label}</TabsTrigger>
           ))}
         </TabsList>
 
+        {/* Cashier Sales & Cancellation Audit Tab */}
+        <TabsContent value="cashier" className="space-y-6 mt-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 border-border bg-card">
+              <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                <span>Total Cashier Sales</span>
+                <DollarSign className="w-4 h-4 text-emerald-500" />
+              </div>
+              <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{fmtINR(totalCashierSales)}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">{completed.length} Completed Orders</p>
+            </Card>
+
+            <Card className="p-4 border-border bg-card">
+              <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                <span>Discounts Allowed</span>
+                <Percent className="w-4 h-4 text-purple-500" />
+              </div>
+              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{fmtINR(totalCashierDiscount)}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Cashier Granted Discounts</p>
+            </Card>
+
+            <Card className="p-4 border-border bg-card">
+              <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                <span>Cancelled Orders</span>
+                <XCircle className="w-4 h-4 text-rose-500" />
+              </div>
+              <p className="text-xl font-bold text-rose-600 dark:text-rose-400">{totalCashierCancelledCount}</p>
+              <p className="text-[11px] text-rose-500 mt-0.5">Value: {fmtINR(totalCashierCancelledAmount)}</p>
+            </Card>
+
+            <Card className="p-4 border-border bg-card">
+              <div className="flex justify-between items-center text-xs text-muted-foreground mb-1">
+                <span>Active Cashiers</span>
+                <UserCheck className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-xl font-bold text-foreground">{cashierRows.length}</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Staff on duty in period</p>
+            </Card>
+          </div>
+
+          {/* Cashier Detailed Performance Table */}
+          <Card className="border-border">
+            <CardHeader className="pb-3 border-b border-border/50">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <UserCheck className="w-4.5 h-4.5 text-primary" />
+                Cashier-wise Sales, Discount & Cancellation Summary ({dateLabel})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Tracks individual cashier performance, total collection by cash/digital, discounts given, and voided orders
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Cashier Name</TableHead>
+                    <TableHead className="text-right">Orders</TableHead>
+                    <TableHead className="text-right">Net Sales</TableHead>
+                    <TableHead className="text-right">Discount</TableHead>
+                    <TableHead className="text-right">Cancelled</TableHead>
+                    <TableHead className="text-right">Cash Coll.</TableHead>
+                    <TableHead className="text-right">UPI / Digital</TableHead>
+                    <TableHead className="text-right">Udhar / Credit</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cashierRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-6">
+                        No cashier sales records found for this period.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    cashierRows.map((r, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-semibold text-foreground flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px]">#{idx + 1}</Badge>
+                          {r.cashierName}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{r.totalOrders}</TableCell>
+                        <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
+                          {fmtINR(r.totalSales)}
+                        </TableCell>
+                        <TableCell className="text-right text-purple-600 dark:text-purple-400 font-semibold">
+                          {fmtINR(r.totalDiscount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.cancelledOrders > 0 ? (
+                            <span className="text-rose-500 font-bold">
+                              {r.cancelledOrders} ({fmtINR(r.cancelledAmount)})
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">0</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{fmtINR(r.cashSales)}</TableCell>
+                        <TableCell className="text-right font-medium text-blue-500">{fmtINR(r.upiSales + r.cardSales)}</TableCell>
+                        <TableCell className="text-right font-medium text-amber-500">{fmtINR(r.creditSales)}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Cancelled Orders Audit Log */}
+          <Card className="border-border">
+            <CardHeader className="pb-3 border-b border-border/50">
+              <CardTitle className="text-base font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                <XCircle className="w-4.5 h-4.5" />
+                Cancelled / Voided Orders Audit Trail
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Complete log of orders cancelled by cashiers with cancellation reasons and timestamp
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bill / Order ID</TableHead>
+                    <TableHead>Cashier</TableHead>
+                    <TableHead>Cancelled Date & Time</TableHead>
+                    <TableHead>Cancellation Reason</TableHead>
+                    <TableHead className="text-right">Voided Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cancelled.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
+                        No orders were cancelled during this period.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    cancelled.map((o) => (
+                      <TableRow key={o.id}>
+                        <TableCell className="font-bold text-foreground">
+                          {o.billNumber || `#${o.id.slice(0, 8)}`}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium">
+                          {(o as any).createdBy || (o as any).cashierName || (o as any).staffName || 'Counter Cashier'}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {new Date(o.createdAt).toLocaleString('en-IN')}
+                        </TableCell>
+                        <TableCell className="text-xs font-medium text-rose-500">
+                          {o.cancelReason || 'Cancelled by Cashier'}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-rose-600">
+                          {fmtINR(o.total)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* Item-wise */}
         <TabsContent value="item">
           <Card>
             <CardHeader><CardTitle>Item-wise Sales ({dateLabel})</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Item</TableHead><TableHead>Category</TableHead>
@@ -298,7 +555,7 @@ const MoreReportsPage: React.FC = () => {
         <TabsContent value="tax">
           <Card>
             <CardHeader><CardTitle>Tax & GST Summary ({dateLabel})</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4 p-6">
               {[
                 ['Total Bills', taxRows.count],
                 ['Gross Sales', fmtINR(taxRows.gross)],
@@ -307,7 +564,7 @@ const MoreReportsPage: React.FC = () => {
                 ['SGST', fmtINR(taxRows.sgst)],
                 ['Total Tax', fmtINR(taxRows.totalTax)],
               ].map(([l, v]) => (
-                <div key={l as string} className="border rounded-lg p-4">
+                <div key={l as string} className="border rounded-lg p-4 bg-card">
                   <div className="text-xs text-muted-foreground">{l}</div>
                   <div className="text-xl font-bold mt-1">{v}</div>
                 </div>
@@ -320,7 +577,7 @@ const MoreReportsPage: React.FC = () => {
         <TabsContent value="payment">
           <Card>
             <CardHeader><CardTitle>Payment Mode Breakdown ({dateLabel})</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Method</TableHead>
@@ -346,7 +603,7 @@ const MoreReportsPage: React.FC = () => {
         <TabsContent value="staff">
           <Card>
             <CardHeader><CardTitle>Staff / Cashier Performance ({dateLabel})</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Staff</TableHead>
@@ -361,7 +618,7 @@ const MoreReportsPage: React.FC = () => {
                       <TableCell className="font-medium">{r.name}</TableCell>
                       <TableCell className="text-right">{r.bills}</TableCell>
                       <TableCell className="text-right">{fmtINR(r.revenue)}</TableCell>
-                      <TableCell className="text-right">{fmtINR(r.revenue / r.bills)}</TableCell>
+                      <TableCell className="text-right">{fmtINR(r.revenue / (r.bills || 1))}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -374,7 +631,7 @@ const MoreReportsPage: React.FC = () => {
         <TabsContent value="customer">
           <Card>
             <CardHeader><CardTitle>Top Customers ({dateLabel})</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Customer</TableHead><TableHead>Phone</TableHead>
@@ -402,7 +659,7 @@ const MoreReportsPage: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-4">
             <Card>
               <CardHeader><CardTitle>Hourly Sales</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader><TableRow><TableHead>Hour</TableHead><TableHead className="text-right">Bills</TableHead><TableHead className="text-right">Revenue</TableHead></TableRow></TableHeader>
                   <TableBody>
@@ -420,7 +677,7 @@ const MoreReportsPage: React.FC = () => {
             </Card>
             <Card>
               <CardHeader><CardTitle>Day-wise Sales</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader><TableRow><TableHead>Date</TableHead><TableHead className="text-right">Bills</TableHead><TableHead className="text-right">Revenue</TableHead></TableRow></TableHeader>
                   <TableBody>
@@ -444,16 +701,16 @@ const MoreReportsPage: React.FC = () => {
           <div className="grid md:grid-cols-2 gap-4">
             <Card>
               <CardHeader><CardTitle>Summary</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3">
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Total Discount</div><div className="text-lg font-bold">{fmtINR(discountRows.totalDiscount)}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Discounted Bills</div><div className="text-lg font-bold">{discountRows.discountedBills}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Cancelled Bills</div><div className="text-lg font-bold">{discountRows.cancelledCount}</div></div>
-                <div className="border rounded-lg p-3"><div className="text-xs text-muted-foreground">Cancelled Amount</div><div className="text-lg font-bold">{fmtINR(discountRows.cancelledTotal)}</div></div>
+              <CardContent className="grid grid-cols-2 gap-3 p-6">
+                <div className="border rounded-lg p-3 bg-card"><div className="text-xs text-muted-foreground">Total Discount</div><div className="text-lg font-bold">{fmtINR(discountRows.totalDiscount)}</div></div>
+                <div className="border rounded-lg p-3 bg-card"><div className="text-xs text-muted-foreground">Discounted Bills</div><div className="text-lg font-bold">{discountRows.discountedBills}</div></div>
+                <div className="border rounded-lg p-3 bg-card"><div className="text-xs text-muted-foreground">Cancelled Bills</div><div className="text-lg font-bold">{discountRows.cancelledCount}</div></div>
+                <div className="border rounded-lg p-3 bg-card"><div className="text-xs text-muted-foreground">Cancelled Amount</div><div className="text-lg font-bold">{fmtINR(discountRows.cancelledTotal)}</div></div>
               </CardContent>
             </Card>
             <Card>
               <CardHeader><CardTitle>Cancelled Bills</CardTitle></CardHeader>
-              <CardContent>
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader><TableRow><TableHead>Bill</TableHead><TableHead>Reason</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
                   <TableBody>
@@ -476,7 +733,7 @@ const MoreReportsPage: React.FC = () => {
         <TabsContent value="inventory">
           <Card>
             <CardHeader><CardTitle>Inventory / Stock Report</CardTitle></CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader><TableRow>
                   <TableHead>Item</TableHead>

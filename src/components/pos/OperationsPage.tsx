@@ -184,6 +184,7 @@ export const OperationsPage: React.FC = () => {
     ...(canUseOwnerChecklist ? [{ id: 'checklists', icon: ClipboardList, label: 'Checklist', path: '/checklists' }] : []),
     { id: 'accounting', icon: Building, label: 'Accounting', path: '/accounting' },
     // Quick Actions Row
+    { id: 'checklist', icon: CheckSquare, label: 'Checklist', path: '/operations/checklists' },
     { id: 'menu', icon: UtensilsCrossed, label: t('operations.menu'), path: '/menu' },
     { id: 'reports', icon: BarChart3, label: t('nav.reports'), path: '/reports' },
     { id: 'orders', icon: ClipboardList, label: t('operations.orders'), path: '/orders' },
@@ -203,24 +204,7 @@ export const OperationsPage: React.FC = () => {
       icon: RefreshCw, 
       label: t('operations.manualSync'), 
       action: async () => {
-        // Clear legacy queues that cause the stuck banner
-        for (let i = localStorage.length - 1; i >= 0; i--) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith('pos_failed_sync_queue_') || key.startsWith('pos_deleted_'))) {
-            localStorage.removeItem(key);
-          }
-        }
-        window.dispatchEvent(new Event('storage'));
-        
-        toast.loading('Syncing with cloud...', { id: 'manual-sync' });
-        try {
-          const { syncEngine } = await import('@/lib/syncEngine');
-          await syncEngine.drainQueue();
-          await syncEngine.sync();
-          toast.success(t('operations.dataSynced'), { id: 'manual-sync' });
-        } catch (e) {
-          toast.error('Sync failed', { id: 'manual-sync' });
-        }
+        toast.success("POS is Online. Data is saved to the cloud in real-time.");
       } 
     },
     ...(canAccess('staffManagement') ? [

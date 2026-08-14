@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DateRange } from 'react-day-picker';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
 import { useLocale } from '@/contexts/LocaleContext';
-import { BarChart3, TrendingUp, TrendingDown, Download, ArrowLeft, Store, Printer, XCircle, AlertTriangle, Loader2, DollarSign, Wallet, CreditCard, Star, ListOrdered, ShoppingCart, Users, Layers, Percent, Coffee, Hash, FileText, IndianRupee, ArrowDownUp, PiggyBank, Sparkles, Brain, Package, Building2, Landmark, Wrench, ChefHat, Factory, PackageOpen, PackageCheck, Hourglass, Ghost, Utensils, RefreshCw, PieChart as PieIcon, Activity, PackagePlus, Truck } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, Download, ArrowLeft, Store, Printer, XCircle, AlertTriangle, Loader2, DollarSign, Wallet, CreditCard, Star, ListOrdered, ShoppingCart, Users, UserCheck, Layers, Percent, Coffee, Hash, FileText, IndianRupee, ArrowDownUp, PiggyBank, Sparkles, Brain, Package, Building2, Landmark, Wrench, ChefHat, Factory, PackageOpen, PackageCheck, Hourglass, Ghost, Utensils, RefreshCw, PieChart as PieIcon, Activity, PackagePlus, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useOwnerStore } from '@/hooks/useOwnerStore';
@@ -11,6 +11,170 @@ import { printReport, formatReportCurrency } from '@/lib/reportPrintUtils';
 import { useAnalytics, TimeRange } from '@/hooks/useAnalytics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useFeatureToggles } from '@/hooks/useFeatureToggles';
+
+interface Category {
+  id: string;
+  emoji: string;
+  name: string;
+  title: string;
+}
+
+const CATEGORIES: Category[] = [
+  {
+    id: 'sales',
+    emoji: '📊',
+    name: 'Sales Reports',
+    title: '📊 Sales Reports',
+  },
+  {
+    id: 'inventory',
+    emoji: '📦',
+    name: 'Inventory Management',
+    title: '📦 Inventory Management',
+  },
+  {
+    id: 'purchase',
+    emoji: '🛒',
+    name: 'Purchase Management',
+    title: '🛒 Purchase Management',
+  },
+  {
+    id: 'financial',
+    emoji: '💰',
+    name: 'Financial & Accounting',
+    title: '💰 Financial & Accounting',
+  },
+  {
+    id: 'staff',
+    emoji: '👨💼',
+    name: 'Staff & Employee Reports',
+    title: '👨💼 Staff & Employee Reports',
+  },
+  {
+    id: 'customer',
+    emoji: '👥',
+    name: 'Customer Reports',
+    title: '👥 Customer Reports',
+  },
+  {
+    id: 'tax',
+    emoji: '💳',
+    name: 'Tax & Payments',
+    title: '💳 Tax & Payments',
+  },
+  {
+    id: 'returns',
+    emoji: '🔄',
+    name: 'Returns & Refunds',
+    title: '🔄 Returns & Refunds',
+  },
+  {
+    id: 'outlet',
+    emoji: '🏬',
+    name: 'Outlet Reports',
+    title: '🏬 Outlet Reports',
+  },
+  {
+    id: 'forecast',
+    emoji: '📈',
+    name: 'Forecast & Analytics',
+    title: '📈 Forecast & Analytics',
+  },
+  {
+    id: 'masters',
+    emoji: '🏷️',
+    name: 'Masters',
+    title: '🏷️ Masters',
+  }
+];
+
+const CATEGORY_ITEMS_MAPPING: Record<string, string[]> = {
+  sales: [
+    'Sales Summary',
+    'Order Summary',
+    'Item-wise Sales',
+    '🏷️ Brand-Wise Sales',
+    'Category Summary',
+    'Item Summary',
+    'Executive Sales',
+    '📊 Sales Comparison',
+    'Hourly / Day-wise',
+    'Group Summary',
+    'Variation Summary',
+    'Cover Size Summary',
+    'Tip Summary',
+    'Counter Summary',
+    'Discount & Cancellation',
+    '📝 Quotations',
+    '📈 Quotation Report',
+  ],
+  inventory: [
+    '📒 Stock Ledger',
+    '⚠️ Reorder Level',
+    '🔧 Stock Adjustment',
+    '🔮 Inventory Forecast',
+    '📉 Stock Consumption',
+    '🍳 Recipe Consumption',
+    '🏭 Production Report',
+    '📦 Opening & Closing Audit',
+    '⏳ Stock Aging',
+    '👻 Dead Stock',
+    '🍔 Food Cost',
+    '🔄 Inventory Turnover',
+    '🅰️ ABC Analysis',
+    '📈 XYZ Analysis',
+    '📊 Overstock Analysis',
+    'Inventory / Stock',
+  ],
+  purchase: [
+    '📋 Purchase Register',
+    '📊 Purchase Analytics',
+    '🚚 Vendor Purchase',
+  ],
+  financial: [
+    '📚 Accounting',
+    'Cash Flow',
+    'Due Payment',
+    'Expense Tracker',
+    'Withdrawal',
+    'Cash Top-Up',
+  ],
+  staff: [
+    '🧑‍💻 Cashier Sales & Audit',
+    '👥 Employee Performance',
+    'Staff Performance',
+  ],
+  customer: [
+    'Customer Report',
+  ],
+  tax: [
+    'Tax & GST',
+    'Payment Mode',
+    '💳 Payment Gateway Report',
+  ],
+  returns: [
+    '↩️ Sales Return & Refund Center',
+    '↩️ Sales Return Report',
+  ],
+  outlet: [
+    '🏬 Outlet & Location Reports',
+  ],
+  forecast: [
+    '🔮 Forecast Reports',
+    '⭐ Advanced Reports',
+  ],
+  masters: [
+    '🏷️ Brand Master',
+  ]
+};
+
+const CATEGORY_MAPPING: Record<string, string> = {};
+Object.entries(CATEGORY_ITEMS_MAPPING).forEach(([catId, items]) => {
+  items.forEach(item => {
+    CATEGORY_MAPPING[item] = catId;
+  });
+});
+
 
 export const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -22,7 +186,17 @@ export const ReportsPage: React.FC = () => {
   const { canAccess } = useSubscription();
   const { toggles: featureToggles } = useFeatureToggles();
 
-  // Switch to custom when dateRange changes
+  const [openCategories, setOpenCategories] = useState<string[]>(['sales']);
+
+  const toggleCategory = (categoryId: string) => {
+    setOpenCategories(prev =>
+      prev.includes(categoryId)
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  // Switch to custom when dateRange changes; revert to today when cleared
   useEffect(() => {
     if (dateRange?.from) {
       setTimeRange('custom');
@@ -31,7 +205,9 @@ export const ReportsPage: React.FC = () => {
     }
   }, [dateRange]);
 
+
   const reportLinks = [
+    { label: '🧑‍💻 Cashier Sales & Audit', path: '/reports/more?r=cashier', icon: UserCheck },
     { label: '📚 Accounting', path: '/accounting', icon: Landmark },
     // Inventory & Purchase (Phase 1)
     { label: '📒 Stock Ledger', path: '/reports/stock-ledger', icon: Package },
@@ -43,9 +219,7 @@ export const ReportsPage: React.FC = () => {
     { label: '🏭 Production Report', path: '/reports/production', icon: Factory },
     { label: '📋 Purchase Register', path: '/reports/purchase-register', icon: FileText },
     { label: '📊 Purchase Analytics', path: '/reports/purchase-analytics', icon: BarChart3 },
-    // Inventory & Purchase (Phase 2)
-    { label: '📦 Opening Stock', path: '/reports/opening-stock', icon: PackageOpen },
-    { label: '📦 Closing Stock', path: '/reports/closing-stock', icon: PackageCheck },
+    { label: '📦 Opening & Closing Audit', path: '/reports/opening-closing', icon: PackageCheck },
     { label: '⏳ Stock Aging', path: '/reports/stock-aging', icon: Hourglass },
     { label: '👻 Dead Stock', path: '/reports/dead-stock', icon: Ghost },
     { label: '🍔 Food Cost', path: '/reports/food-cost', icon: Utensils },
@@ -175,7 +349,10 @@ export const ReportsPage: React.FC = () => {
 
   const timeRanges = [
     { id: 'today', label: t('common.today') },
+    { id: 'yesterday', label: t('common.yesterday') || 'Yesterday' },
   ] as const;
+
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -223,19 +400,76 @@ export const ReportsPage: React.FC = () => {
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Report Grid Cards */}
+        {/* Category Buttons Grid */}
         <div className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 md:gap-3">
-          {reportLinks.map((item) => {
-            const Icon = item.icon;
+          {CATEGORIES.map((category) => {
+            const hasItems = reportLinks.some(item => CATEGORY_MAPPING[item.label] === category.id);
+            if (!hasItems) return null;
+
+            const isOpen = openCategories.includes(category.id);
+
             return (
               <button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="flex flex-col items-center justify-center gap-1.5 md:gap-2 p-3 md:p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 active:scale-95 transition-all duration-200 min-h-[80px] md:min-h-[100px] group touch-manipulation"
+                key={category.id}
+                onClick={() => toggleCategory(category.id)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1.5 md:gap-2 p-3 md:p-4 rounded-xl border transition-all duration-200 min-h-[80px] md:min-h-[100px] group touch-manipulation text-center",
+                  isOpen 
+                    ? "border-primary bg-primary/10 text-primary ring-1 ring-primary" 
+                    : "border-border bg-card hover:bg-accent hover:border-primary/50 text-foreground"
+                )}
               >
-                <Icon className="w-6 h-6 md:w-8 md:h-8 text-foreground group-hover:text-primary transition-colors" />
-                <span className="text-[10px] md:text-xs text-center text-foreground font-medium leading-tight line-clamp-2">{item.label}</span>
+                {/* Large Emoji as the Category Icon */}
+                <span className="text-xl md:text-2xl mb-0.5">{category.emoji}</span>
+                <span className={cn("text-[10px] md:text-xs text-center font-semibold leading-tight line-clamp-2 transition-colors", isOpen ? "text-primary" : "text-foreground group-hover:text-primary")}>
+                  {category.name}
+                </span>
               </button>
+            );
+          })}
+        </div>
+
+        {/* Active Category Sections */}
+        <div className="space-y-4 pt-2">
+          {CATEGORIES.map((category) => {
+            const isOpen = openCategories.includes(category.id);
+            if (!isOpen) return null;
+
+            const categoryItems = reportLinks.filter(item => CATEGORY_MAPPING[item.label] === category.id);
+            if (categoryItems.length === 0) return null;
+
+            return (
+              <div 
+                key={category.id} 
+                className="bg-card border border-border rounded-2xl p-4 transition-all duration-200"
+              >
+                <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
+                  <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
+                    {category.title}
+                  </h3>
+                  <button 
+                    onClick={() => toggleCategory(category.id)}
+                    className="text-xs text-muted-foreground hover:text-foreground font-medium px-2.5 py-1 rounded-lg border border-border hover:bg-accent active:scale-95 transition-all"
+                  >
+                    Hide
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 md:gap-3">
+                  {categoryItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.path}
+                        onClick={() => navigate(item.path)}
+                        className="flex flex-col items-center justify-center gap-1.5 md:gap-2 p-3 md:p-4 rounded-xl border border-border bg-card hover:bg-accent hover:border-primary/50 active:scale-95 transition-all duration-200 min-h-[80px] md:min-h-[100px] group touch-manipulation w-full"
+                      >
+                        <Icon className="w-6 h-6 md:w-8 md:h-8 text-foreground group-hover:text-primary transition-colors" />
+                        <span className="text-[10px] md:text-xs text-center text-foreground font-medium leading-tight line-clamp-2">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             );
           })}
         </div>

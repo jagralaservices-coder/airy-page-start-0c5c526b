@@ -1,27 +1,58 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, X, ImageIcon } from 'lucide-react';
+import { Camera, Upload, X, ImageIcon, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 
 interface MenuImageUploadProps {
   imageUrl: string;
   onImageChange: (url: string) => void;
 }
 
+/** Resize & compress an image file to a base64 data URL (max 800px, JPEG 75% quality) */
+const compressToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const MAX = 800;
+        let { width, height } = img;
+        if (width > MAX || height > MAX) {
+          if (width > height) { height = Math.round((height * MAX) / width); width = MAX; }
+          else { width = Math.round((width * MAX) / height); height = MAX; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
+
 export const MenuImageUpload: React.FC<MenuImageUploadProps> = ({ imageUrl, onImageChange }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [usedLocalFallback, setUsedLocalFallback] = useState(false);
 
   const uploadFile = async (file: File) => {
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be under 5MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be under 10MB');
       return;
     }
 
     setUploading(true);
+    setUsedLocalFallback(false);
+
+    // --- Attempt 1: Supabase Storage ---
     try {
       const ext = file.name.split('.').pop() || 'jpg';
       const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -31,17 +62,30 @@ export const MenuImageUpload: React.FC<MenuImageUploadProps> = ({ imageUrl, onIm
         .from('menu-images')
         .upload(filePath, file, { cacheControl: '3600', upsert: false });
 
-      if (uploadError) throw uploadError;
+      if (!uploadError) {
+        const { data: { publicUrl } } = supabase.storage
+          .from('menu-images')
+          .getPublicUrl(filePath);
+        onImageChange(publicUrl);
+        toast.success('Image uploaded!');
+        setUploading(false);
+        return;
+      }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('menu-images')
-        .getPublicUrl(filePath);
-
-      onImageChange(publicUrl);
-      toast.success('Image uploaded!');
+      console.warn('Supabase storage upload failed, using local fallback:', uploadError.message);
     } catch (err: any) {
-      console.error('Upload error:', err);
-      toast.error('Failed to upload image');
+      console.warn('Supabase storage error, using local fallback:', err?.message ?? err);
+    }
+
+    // --- Attempt 2: Local base64 fallback ---
+    try {
+      const base64 = await compressToBase64(file);
+      onImageChange(base64);
+      setUsedLocalFallback(true);
+      toast.success('Image saved locally!');
+    } catch (err: any) {
+      console.error('Base64 conversion failed:', err);
+      toast.error('Failed to process image. Please try a smaller file.');
     } finally {
       setUploading(false);
     }
@@ -55,6 +99,7 @@ export const MenuImageUpload: React.FC<MenuImageUploadProps> = ({ imageUrl, onIm
 
   const removeImage = () => {
     onImageChange('');
+    setUsedLocalFallback(false);
   };
 
   return (
@@ -81,7 +126,10 @@ export const MenuImageUpload: React.FC<MenuImageUploadProps> = ({ imageUrl, onIm
           className="w-24 h-24 rounded-xl border-2 border-dashed border-primary/30 bg-primary/5 flex flex-col items-center justify-center cursor-pointer hover:border-primary/60 hover:bg-primary/10 transition-all"
         >
           {uploading ? (
-            <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+            <div className="flex flex-col items-center gap-1">
+              <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
+              <span className="text-[9px] text-primary/60">Uploading…</span>
+            </div>
           ) : (
             <>
               <Upload className="w-5 h-5 text-primary/60 mb-1" />
@@ -99,6 +147,12 @@ export const MenuImageUpload: React.FC<MenuImageUploadProps> = ({ imageUrl, onIm
         >
           <Camera className="w-3.5 h-3.5" /> Use Camera
         </button>
+      )}
+
+      {usedLocalFallback && imageUrl && (
+        <p className="flex items-center gap-1 text-[10px] text-amber-500">
+          <AlertCircle className="w-3 h-3" /> Saved locally (cloud storage unavailable)
+        </p>
       )}
 
       <input

@@ -625,9 +625,9 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const isStaffScopedRole = ['staff', 'cashier'].includes(String((roleData as any)?.role || '').toLowerCase());
       const resolvedMerchantId = (roleData as any)?.merchant_id || (roleData as any)?.customer_id || null;
 
-      if (!resolvedMerchantId && !isStaffScopedRole) {
+      if (!roleData?.merchant_id && !isStaffScopedRole) {
         // Allow super_admin and admin to proceed without a merchant_id
-        if (roleData.role !== 'admin' && roleData.role !== 'super_admin') {
+        if (roleData?.role !== 'admin' && roleData?.role !== 'super_admin') {
           console.error('[POSContext] No active role with merchant_id — cloud sync disabled', { roleRows });
           toast.error('Your account is not linked to a merchant. Cloud sync is disabled until an admin assigns you to a store.', {
             id: 'no-merchant-role',
@@ -638,6 +638,8 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
 
+
+      const resolvedMerchantId = (roleData as any)?.merchant_id || (roleData as any)?.customer_id || null;
 
       // Fetch actual stores from DB
       let query = supabase
@@ -2082,14 +2084,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     console.log('ORDER BEFORE SAVE', updatedOrder);
 
-    // Try to save to cloud, but don't block bill printing if it fails (will sync later)
-    try {
-      const saveSuccess = await saveOrderMutation.mutateAsync([updatedOrder]);
-      if (!saveSuccess) {
-        console.warn('[POS] Cloud sync failed - order saved locally, will retry later');
-      }
-    } catch (e) {
-      console.warn('[POS] Cloud sync error - order saved locally:', e);
+    // Cloud-only: Save to cloud and throw error if it fails
+    const saveResult = await saveOrderMutation.mutateAsync([updatedOrder]);
+    if (!saveResult || (saveResult as any).error) {
+      throw new Error(String((saveResult as any).error || 'Cloud saving failed. Please check your internet connection and try again.'));
     }
 
     logSecurityAction('PRINT_BILL', 'orders', updatedOrder.id, undefined, updatedOrder);
@@ -2234,14 +2232,41 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       breakdownKeys: Object.keys(breakdown),
     });
 
-    // Try to save to cloud, but don't block bill printing if it fails (will sync later)
+    // Cloud save: attempt to sync to cloud. If cloud_error is returned (e.g. schema
+    // mismatch before migration runs, network issues), log a warning but do NOT block
+    // the sale — the order will still be saved locally so the cashier can continue.
+    let cloudSaveWarning: string | null = null;
     try {
-      const saveSuccess = await saveOrderMutation.mutateAsync([order]);
-      if (!saveSuccess) {
-        console.warn('[POS] Cloud sync failed - order saved locally, will retry later');
+      const saveResult = await saveOrderMutation.mutateAsync([order]);
+      if (saveResult && (saveResult as any).cloud_error) {
+        cloudSaveWarning = String((saveResult as any).message || 'Cloud sync pending');
+        console.warn('[directBillPrint] Cloud save had an issue (sale will still complete locally):', cloudSaveWarning);
+        // Skip toast for auth/permission issues — order is saved locally, sync will retry silently
+        const isAuthRelated = cloudSaveWarning.toLowerCase().includes('auth') ||
+          cloudSaveWarning.toLowerCase().includes('unauthorized') ||
+          cloudSaveWarning.toLowerCase().includes('forbidden') ||
+          cloudSaveWarning.toLowerCase().includes('permission');
+        if (!isAuthRelated) {
+          toast.warning('Sale saved locally', {
+            description: 'Cloud sync will retry automatically.',
+            duration: 4000,
+          });
+        }
       }
-    } catch (e) {
-      console.warn('[POS] Cloud sync error - order saved locally:', e);
+      // skipped (no store_id, demo mode, or auth) — completely silent, no toast
+    } catch (cloudErr: any) {
+      // Only show toast for real network/server errors (not auth errors)
+      cloudSaveWarning = cloudErr?.message || 'Cloud sync error';
+      const isAuthRelated = cloudSaveWarning.toLowerCase().includes('auth') ||
+        cloudSaveWarning.toLowerCase().includes('unauthorized') ||
+        cloudSaveWarning.toLowerCase().includes('forbidden');
+      console.error('[directBillPrint] Cloud save threw unexpectedly (sale still completes locally):', cloudSaveWarning);
+      if (!isAuthRelated) {
+        toast.warning('Sale saved locally', {
+          description: 'Cloud sync will retry automatically.',
+          duration: 4000,
+        });
+      }
     }
 
     logSecurityAction('PRINT_BILL', 'orders', order.id, undefined, order);
