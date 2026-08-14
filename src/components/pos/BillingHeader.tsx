@@ -115,18 +115,29 @@ export const BillingHeader: React.FC<BillingHeaderProps> = ({ onMenuToggle }) =>
           </button>
 
 
-          {/* Store Display - Single store only */}
-          <div
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
-              activeStore 
-                ? "bg-primary/20 text-primary" 
-                : "bg-secondary"
+          {/* Store Display + Cashier badge */}
+          <div className="flex flex-col items-start gap-1">
+            <div
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
+                activeStore 
+                  ? "bg-primary/20 text-primary" 
+                  : "bg-secondary"
+              )}
+            >
+              <Store className="w-4 h-4" />
+              {activeStore ? activeStore.name : 'No Store'}
+            </div>
+
+            {showCashierBadge && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs">
+                <BadgeCheck className="w-3.5 h-3.5 text-amber-500" />
+                <span className="font-semibold text-amber-500">Cashier</span>
+                <span className="text-muted-foreground truncate max-w-[140px]">· {cashierDisplayName}</span>
+              </div>
             )}
-          >
-            <Store className="w-4 h-4" />
-            {activeStore ? activeStore.name : 'No Store'}
           </div>
+
 
           {/* Online/Offline Status */}
           <div
