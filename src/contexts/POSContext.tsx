@@ -639,7 +639,6 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
 
 
-      const resolvedMerchantId = (roleData as any)?.merchant_id || (roleData as any)?.customer_id || null;
 
       // Fetch actual stores from DB
       let query = supabase

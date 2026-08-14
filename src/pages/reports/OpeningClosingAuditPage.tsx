@@ -418,14 +418,14 @@ export const OpeningClosingAuditPage: React.FC<{ onBack?: () => void }> = ({ onB
         i.productName, i.sku, i.barcode, i.category, i.unit, i.openingQty, i.netWeight || 1, i.costPrice.toFixed(2), i.sellingPrice.toFixed(2),
       ]);
       if (type === 'csv') downloadCSV(`Opening_Stock_Audit_${Date.now()}.csv`, headers, rows);
-      else printReport(title, dateStr, headers, rows);
+      else printReport({ title, dateRange: dateStr }, [{ type: 'table', data: { headers, rows } }]);
     } else {
       const headers = ['Product', 'SKU', 'Category', 'Opening', 'Purchased', 'Sold', 'Wastage', 'Expected', 'Physical', 'Diff', 'Variance %', 'Status'];
       const rows = filteredClosingItems.map((i) => [
         i.productName, i.sku, i.category, i.openingStock, i.purchasedQty, i.soldQty, i.wastageQty, i.expectedClosingStock, i.physicalCount, i.difference, `${i.variancePercent.toFixed(1)}%`, i.status.toUpperCase(),
       ]);
       if (type === 'csv') downloadCSV(`Closing_Inventory_Reconciliation_${Date.now()}.csv`, headers, rows);
-      else printReport(title, dateStr, headers, rows);
+      else printReport({ title, dateRange: dateStr }, [{ type: 'table', data: { headers, rows } }]);
     }
   };
 
