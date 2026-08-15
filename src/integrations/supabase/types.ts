@@ -7695,7 +7695,59 @@ export type Database = {
         Args: { _object_name: string }
         Returns: boolean
       }
+      can_access_store: { Args: { _store_id: string }; Returns: boolean }
       can_manage_store: { Args: { _store_id: string }; Returns: boolean }
+      cancel_sale: {
+        Args: { _expected_version?: number; _order_id: string; _reason: string }
+        Returns: {
+          bill_number: string | null
+          business_date: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by_user_id: string | null
+          cash_session_id: string | null
+          cashier_id: string | null
+          cashier_name: string | null
+          cashier_shift_id: string | null
+          change_amount: number
+          client_transaction_id: string | null
+          created_at: string
+          created_by_role: string | null
+          created_by_user_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          device_name: string | null
+          discount: number
+          id: string
+          items: Json
+          metadata: Json
+          notes: string | null
+          order_number: string
+          order_type: Database["public"]["Enums"]["order_type"]
+          paid_amount: number
+          payment_breakdown: Json | null
+          payment_details: Json | null
+          payment_method: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          store_id: string | null
+          subtotal: number
+          table_id: string | null
+          table_number: string | null
+          tax: number
+          tax_total: number
+          total: number
+          updated_at: string
+          updated_by_user_id: string | null
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cashier_create: {
         Args: {
           _cashier_code: string
@@ -7732,6 +7784,67 @@ export type Database = {
         Returns: string
       }
       delete_store_cascade: { Args: { p_store_id: string }; Returns: undefined }
+      edit_sale: {
+        Args: {
+          _customer_name?: string
+          _customer_phone?: string
+          _discount?: number
+          _expected_version: number
+          _items?: Json
+          _notes?: string
+          _order_id: string
+          _payment_method?: string
+          _tax?: number
+        }
+        Returns: {
+          bill_number: string | null
+          business_date: string | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by_user_id: string | null
+          cash_session_id: string | null
+          cashier_id: string | null
+          cashier_name: string | null
+          cashier_shift_id: string | null
+          change_amount: number
+          client_transaction_id: string | null
+          created_at: string
+          created_by_role: string | null
+          created_by_user_id: string | null
+          customer_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          device_name: string | null
+          discount: number
+          id: string
+          items: Json
+          metadata: Json
+          notes: string | null
+          order_number: string
+          order_type: Database["public"]["Enums"]["order_type"]
+          paid_amount: number
+          payment_breakdown: Json | null
+          payment_details: Json | null
+          payment_method: string | null
+          status: Database["public"]["Enums"]["order_status"]
+          store_id: string | null
+          subtotal: number
+          table_id: string | null
+          table_number: string | null
+          tax: number
+          tax_total: number
+          total: number
+          updated_at: string
+          updated_by_user_id: string | null
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "orders"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       expire_old_quotations: { Args: never; Returns: number }
       generate_demand_forecast: {
         Args: { days: number; p_merchant_id: string }
