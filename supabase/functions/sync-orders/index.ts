@@ -47,22 +47,24 @@ async function authenticateRequest(req: Request, supabaseAdmin: any, store_id: s
             .select('role, store_id, merchant_id')
             .eq('user_id', user.id)
             .eq('is_active', true)
-            .in('role', ['super_admin', 'admin', 'owner', 'store_manager', 'staff'])
-          const roleData = (roleRows || []).find((r: any) => r.role === 'super_admin' || r.role === 'admin')
-            || (roleRows || []).find((r: any) => r.role === 'owner')
-            || (roleRows || []).find((r: any) => r.store_id === store_id)
-          
-          if (roleData) {
-            if (roleData.role === 'admin' || roleData.role === 'super_admin') return { authorized: true }
-            if (roleData.role === 'owner') {
-              const { data: store } = await supabaseAdmin
-                .from('stores').select('merchant_id').eq('id', store_id).maybeSingle()
-              if (store && store.merchant_id === roleData.merchant_id) return { authorized: true }
-            }
-            if ((roleData.role === 'store_manager' || roleData.role === 'staff') && roleData.store_id === store_id) {
-              return { authorized: true }
-            }
+          const rows = roleRows || []
+          const platform = rows.find((r: any) => r.role === 'super_admin' || r.role === 'admin')
+          if (platform) return { authorized: true }
+
+          const owner = rows.find((r: any) => r.role === 'owner' || r.role === 'merchant')
+          if (owner?.merchant_id) {
+            const { data: store } = await supabaseAdmin
+              .from('stores').select('merchant_id').eq('id', store_id).maybeSingle()
+            if (store && store.merchant_id === owner.merchant_id) return { authorized: true }
           }
+
+          // store_manager / cashier / staff scoped to this exact store
+          if (rows.some((r: any) => r.store_id === store_id)) return { authorized: true }
+
+          const { data: ownedStore } = await supabaseAdmin
+            .from('stores').select('owner_id').eq('id', store_id).maybeSingle()
+          if (ownedStore?.owner_id === user.id) return { authorized: true }
+
           // Fall through to Path 2/3 instead of denying immediately
         }
       } catch {}
