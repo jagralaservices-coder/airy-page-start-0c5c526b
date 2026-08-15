@@ -4274,14 +4274,19 @@ export type Database = {
       orders: {
         Row: {
           bill_number: string | null
+          business_date: string | null
           cancel_reason: string | null
           cancelled_at: string | null
+          cancelled_by_user_id: string | null
           cash_session_id: string | null
           cashier_id: string | null
           cashier_name: string | null
           cashier_shift_id: string | null
           change_amount: number
+          client_transaction_id: string | null
           created_at: string
+          created_by_role: string | null
+          created_by_user_id: string | null
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
@@ -4306,17 +4311,24 @@ export type Database = {
           tax_total: number
           total: number
           updated_at: string
+          updated_by_user_id: string | null
+          version: number
         }
         Insert: {
           bill_number?: string | null
+          business_date?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
+          cancelled_by_user_id?: string | null
           cash_session_id?: string | null
           cashier_id?: string | null
           cashier_name?: string | null
           cashier_shift_id?: string | null
           change_amount?: number
+          client_transaction_id?: string | null
           created_at?: string
+          created_by_role?: string | null
+          created_by_user_id?: string | null
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
@@ -4341,17 +4353,24 @@ export type Database = {
           tax_total?: number
           total?: number
           updated_at?: string
+          updated_by_user_id?: string | null
+          version?: number
         }
         Update: {
           bill_number?: string | null
+          business_date?: string | null
           cancel_reason?: string | null
           cancelled_at?: string | null
+          cancelled_by_user_id?: string | null
           cash_session_id?: string | null
           cashier_id?: string | null
           cashier_name?: string | null
           cashier_shift_id?: string | null
           change_amount?: number
+          client_transaction_id?: string | null
           created_at?: string
+          created_by_role?: string | null
+          created_by_user_id?: string | null
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
@@ -4376,6 +4395,8 @@ export type Database = {
           tax_total?: number
           total?: number
           updated_at?: string
+          updated_by_user_id?: string | null
+          version?: number
         }
         Relationships: [
           {
@@ -6405,6 +6426,7 @@ export type Database = {
           branch_code: string | null
           branch_name: string | null
           brand_type_default: string
+          business_day_start_time: string
           business_type: string | null
           cashier_billing_mode: boolean
           city: string | null
@@ -6442,6 +6464,7 @@ export type Database = {
           suspension_reason: string | null
           tax_percentage: number | null
           tax_type: string | null
+          timezone: string
           updated_at: string
         }
         Insert: {
@@ -6453,6 +6476,7 @@ export type Database = {
           branch_code?: string | null
           branch_name?: string | null
           brand_type_default?: string
+          business_day_start_time?: string
           business_type?: string | null
           cashier_billing_mode?: boolean
           city?: string | null
@@ -6490,6 +6514,7 @@ export type Database = {
           suspension_reason?: string | null
           tax_percentage?: number | null
           tax_type?: string | null
+          timezone?: string
           updated_at?: string
         }
         Update: {
@@ -6501,6 +6526,7 @@ export type Database = {
           branch_code?: string | null
           branch_name?: string | null
           brand_type_default?: string
+          business_day_start_time?: string
           business_type?: string | null
           cashier_billing_mode?: boolean
           city?: string | null
@@ -6538,6 +6564,7 @@ export type Database = {
           suspension_reason?: string | null
           tax_percentage?: number | null
           tax_type?: string | null
+          timezone?: string
           updated_at?: string
         }
         Relationships: [
@@ -7699,6 +7726,10 @@ export type Database = {
       checklist_submission_is_unlocked: {
         Args: { _sub_id: string }
         Returns: boolean
+      }
+      compute_business_date: {
+        Args: { _store_id: string; _ts: string }
+        Returns: string
       }
       delete_store_cascade: { Args: { p_store_id: string }; Returns: undefined }
       expire_old_quotations: { Args: never; Returns: number }
