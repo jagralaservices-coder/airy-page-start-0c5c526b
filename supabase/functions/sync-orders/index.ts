@@ -138,6 +138,10 @@ serve(async (req) => {
 
     // ACTION: fetch
     if (action === 'fetch') {
+      // Optional business-date window. Callers that pass nothing get a rolling
+      // window; historical data is ALWAYS reachable via explicit from/to.
+      const { business_date_from, business_date_to, days } = body
+
       let query = supabaseAdmin
         .from('orders').select('*').eq('store_id', store_id)
         .order('created_at', { ascending: false })
@@ -146,18 +150,26 @@ serve(async (req) => {
         query = query.gte('updated_at', last_sync_time)
       }
 
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      query = query.gte('created_at', thirtyDaysAgo.toISOString())
+      if (business_date_from) query = query.gte('business_date', business_date_from)
+      if (business_date_to) query = query.lte('business_date', business_date_to)
 
-      const { data, error } = await query.limit(1000)
+      if (!business_date_from && !last_sync_time) {
+        // Default rolling window (configurable), NOT a hard cap on history.
+        const windowDays = Number.isFinite(Number(days)) ? Number(days) : 90
+        const since = new Date()
+        since.setDate(since.getDate() - windowDays)
+        query = query.gte('created_at', since.toISOString())
+      }
+
+      const { data, error } = await query.limit(5000)
 
       if (error) {
-        // Schema mismatch (e.g. missing store_id column) — return empty rather than 500
-        console.warn('sync-orders fetch error, returning empty:', error.message)
+        // NEVER report an empty result on failure — the client must keep its
+        // existing cloud data and surface an error state instead.
+        console.error('sync-orders fetch error:', error.message)
         return new Response(
-          JSON.stringify({ success: true, orders: [], items: [], payments: [] }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: 'Failed to fetch orders', message: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
 
@@ -166,6 +178,7 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
 
     // ACTION: save
     if (action === 'save') {
