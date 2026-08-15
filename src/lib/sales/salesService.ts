@@ -153,15 +153,30 @@ export const cancelSaleOnCloud = async (
 /** Edit a bill server-side (totals are recalculated in the database). */
 export const editSaleOnCloud = async (
   orderId: string,
-  patch: Record<string, any>,
+  patch: {
+    items?: any[];
+    discount?: number;
+    tax?: number;
+    paymentMethod?: string;
+    customerName?: string;
+    customerPhone?: string;
+    notes?: string;
+  },
   expectedVersion?: number | null,
 ): Promise<CreateSaleResult> => {
   try {
     const { data, error } = await supabase.rpc('edit_sale' as any, {
       _order_id: orderId,
-      _patch: patch,
       _expected_version: expectedVersion ?? null,
+      _items: patch.items ?? null,
+      _discount: patch.discount ?? null,
+      _tax: patch.tax ?? null,
+      _payment_method: patch.paymentMethod ?? null,
+      _customer_name: patch.customerName ?? null,
+      _customer_phone: patch.customerPhone ?? null,
+      _notes: patch.notes ?? null,
     });
+
     if (error) {
       const conflict = error.message?.includes('VERSION_CONFLICT');
       return { ok: false, offline: !conflict, error: error.message };
