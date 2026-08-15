@@ -1,6 +1,8 @@
 // POS Context - Force rebuild timestamp: 2026-02-09T12:00
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
+import { createSaleOnCloud } from '@/lib/sales/salesService';
+
 import { supabase } from '@/integrations/supabase/client';
 import { showLowStockAlert, showOutOfStockAlert } from '@/lib/notifications';
 import { formatQuantityDisplay, convertToBaseUnit } from '@/lib/inventoryUtils';
