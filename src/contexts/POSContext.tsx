@@ -1,6 +1,8 @@
 // POS Context - Force rebuild timestamp: 2026-02-09T12:00
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
+import { createSaleOnCloud } from '@/lib/sales/salesService';
+
 import { supabase } from '@/integrations/supabase/client';
 import { showLowStockAlert, showOutOfStockAlert } from '@/lib/notifications';
 import { formatQuantityDisplay, convertToBaseUnit } from '@/lib/inventoryUtils';
@@ -2231,46 +2233,41 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       breakdownKeys: Object.keys(breakdown),
     });
 
-    // Cloud save: attempt to sync to cloud. If cloud_error is returned (e.g. schema
-    // mismatch before migration runs, network issues), log a warning but do NOT block
-    // the sale — the order will still be saved locally so the cashier can continue.
+    // ONLINE-FIRST: the cloud transaction is the source of truth. The bill is
+    // recorded by create_sale_tx (atomic + idempotent + server-recalculated
+    // money). Local storage is only a buffer when the device is offline.
     let cloudSaveWarning: string | null = null;
-    try {
-      const saveResult = await saveOrderMutation.mutateAsync([order]);
-      if (saveResult && (saveResult as any).cloud_error) {
-        cloudSaveWarning = String((saveResult as any).message || 'Cloud sync pending');
-        console.warn('[directBillPrint] Cloud save had an issue (sale will still complete locally):', cloudSaveWarning);
-        // Skip toast for auth/permission issues — order is saved locally, sync will retry silently
-        const isAuthRelated = cloudSaveWarning.toLowerCase().includes('auth') ||
-          cloudSaveWarning.toLowerCase().includes('unauthorized') ||
-          cloudSaveWarning.toLowerCase().includes('forbidden') ||
-          cloudSaveWarning.toLowerCase().includes('permission');
-        if (!isAuthRelated) {
-          toast.warning('Sale saved locally', {
-            description: 'Cloud sync will retry automatically.',
-            duration: 4000,
-          });
-        }
-      }
-      // skipped (no store_id, demo mode, or auth) — completely silent, no toast
-    } catch (cloudErr: any) {
-      // Only show toast for real network/server errors (not auth errors)
-      cloudSaveWarning = cloudErr?.message || 'Cloud sync error';
-      const isAuthRelated = cloudSaveWarning.toLowerCase().includes('auth') ||
-        cloudSaveWarning.toLowerCase().includes('unauthorized') ||
-        cloudSaveWarning.toLowerCase().includes('forbidden');
-      console.error('[directBillPrint] Cloud save threw unexpectedly (sale still completes locally):', cloudSaveWarning);
-      if (!isAuthRelated) {
-        toast.warning('Sale saved locally', {
-          description: 'Cloud sync will retry automatically.',
+    const saleResult = await createSaleOnCloud(order as any);
+    if (saleResult.ok && saleResult.order) {
+      const row: any = saleResult.order;
+      order.id = row.id || order.id;
+      order.billNumber = row.bill_number || order.billNumber;
+      order.subtotal = Number(row.subtotal ?? order.subtotal);
+      order.tax = Number(row.tax ?? order.tax);
+      order.discount = Number(row.discount ?? order.discount);
+      order.total = Number(row.total ?? order.total);
+      (order as any).businessDate = row.business_date;
+      (order as any).version = row.version;
+      (order as any).syncedToCloud = true;
+    } else if (!saleResult.ok) {
+      cloudSaveWarning = saleResult.error || 'Cloud sync pending';
+      (order as any).syncedToCloud = false;
+      if (saleResult.offline) {
+        console.warn('[directBillPrint] Offline — sale buffered locally:', cloudSaveWarning);
+        toast.warning('Offline — sale saved on this device', {
+          description: 'It will sync automatically when the connection returns.',
           duration: 4000,
         });
+      } else {
+        console.error('[directBillPrint] Sale rejected by server:', cloudSaveWarning);
+        toast.error('Sale could not be recorded', { description: cloudSaveWarning, duration: 6000 });
       }
     }
 
     logSecurityAction('PRINT_BILL', 'orders', order.id, undefined, order);
 
     addOrderToStorage(order);
+
     
     console.log('[directBillPrint] Order after storage - checking localStorage');
     const storedOrders = getOrders();
